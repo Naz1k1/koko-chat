@@ -1,0 +1,43 @@
+# --- IDE / Editor ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+*.local
+
+# --- Project-specific tooling ---
+.reasonix/
+
+# --- Go (if added later) ---
+*.out
+*.test
+*.test.exe
+*.prof
+/vendor/
+
+# --- Node (if added later) ---
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# --- Build output ---
+/dist/
+/build/
+/out/
+/target/
+
+# --- Environment & secrets ---
+.env
+.env.local
+.env.*.local
+
+# --- OS files ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# --- Logs ---
+*.log
