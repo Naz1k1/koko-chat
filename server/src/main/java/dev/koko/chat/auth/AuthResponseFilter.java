@@ -9,7 +9,7 @@ import java.io.IOException;
 /** 禁止缓存认证数据；大请求在 JSON 反序列化之前被限制，避免认证入口无限读取。 */
 @Component
 public class AuthResponseFilter extends OncePerRequestFilter {
-    @Override protected boolean shouldNotFilter(HttpServletRequest request) { return !request.getRequestURI().startsWith("/api/auth/") && !request.getRequestURI().equals("/api/im/tickets"); }
+    @Override protected boolean shouldNotFilter(HttpServletRequest request) { return !request.getRequestURI().startsWith("/api/"); }
     @Override protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws ServletException, IOException {
         response.setHeader("Cache-Control", "no-store");
         response.setHeader("Pragma", "no-cache");

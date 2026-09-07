@@ -3,6 +3,7 @@ package dev.koko.chat.transport.netty;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.koko.chat.auth.AuthException;
 import dev.koko.chat.auth.AuthModels.Identity;
+import dev.koko.chat.message.ChatModels.*;
 import java.util.concurrent.RejectedExecutionException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -32,6 +33,7 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
     private Identity identity;
     private boolean authenticating;
     private boolean checking;
+    private int pendingCommands;
     private boolean closing;
     private ScheduledFuture<?> sessionCheck;
 
@@ -78,7 +80,8 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
             switch (type.textValue()) {
                 case "PING" -> reply(context, response("PONG", requestId));
                 case "AUTH" -> authenticate(context, requestId, envelope);
-                case "SEND", "RECEIVED_ACK", "READ" -> error(context, requestId, identity == null ? "UNAUTHENTICATED" : "NOT_IMPLEMENTED", identity == null ? "An authenticated session is required" : "Messaging is not implemented yet");
+                case "SEND", "RECEIVED_ACK" -> command(context, requestId, type.textValue(), envelope);
+                case "READ" -> error(context, requestId, "NOT_IMPLEMENTED", "Read receipts are not implemented yet");
                 default -> error(context, requestId, "NOT_IMPLEMENTED", "Command is not implemented in this skeleton");
             }
         } catch (JsonProcessingException exception) {
@@ -124,13 +127,38 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
         }
     }
 
+    /** 有界并发业务提交，所有响应回到原连接事件循环；断连后的结果不会写到新账号连接。 */
+    private void command(ChannelHandlerContext context,String requestId,String type,JsonNode envelope) {
+        if(identity==null) { error(context,requestId,"UNAUTHENTICATED","Authentication required");return; }
+        if(pendingCommands>=16) { error(context,requestId,"BUSY","Too many pending commands");return; }
+        pendingCommands++;
+        try {
+            authentication.execute(() -> {
+                ObjectNode result;
+                try {
+                    if(type.equals("SEND")) {
+                        var sent=authentication.send(identity,new SendCommand(field(envelope,"conversationId"),field(envelope,"membershipEpoch"),field(envelope,"clientMsgId"),field(envelope,"text")));
+                        result=response("SEND_ACK",requestId);result.set("message",mapper.valueToTree(sent));
+                    } else {
+                        authentication.received(identity,new ReceiptCommand(field(envelope,"conversationId"),field(envelope,"membershipEpoch"),field(envelope,"receivedSeq")));
+                        result=response("RECEIVED_ACK_OK",requestId);
+                    }
+                } catch(AuthException rejected) { result=response("ERROR",requestId).put("code",rejected.code()).put("message",rejected.getMessage()); }
+                catch(Exception unavailable) { result=response("ERROR",requestId).put("code","SERVICE_UNAVAILABLE").put("message","Service temporarily unavailable"); }
+                ObjectNode response=result;
+                context.executor().execute(() -> { pendingCommands--;if(!closing && context.channel().isActive()) reply(context,response); });
+            });
+        } catch(RejectedExecutionException busy) { pendingCommands--;error(context,requestId,"BUSY","Please retry later"); }
+    }
+    private String field(JsonNode envelope,String name) { JsonNode value=envelope.get(name);return value!=null && value.isTextual()?value.textValue():null; }
+
     private void checkSession(ChannelHandlerContext context) {
         if (closing || checking || identity == null) return;
         checking = true;
         try {
             authentication.execute(() -> {
                 int code;
-                try { code = authentication.active(identity) ? 0 : 1008; }
+                try { code = authentication.renew(identity) ? 0 : 1008; }
                 catch (Exception unavailable) { code = 1013; }
                 int closeCode = code;
                 context.executor().execute(() -> {

@@ -29,13 +29,16 @@ spring:
     # 发布确认与不可路由返回必须同时检查；消费确认不代表设备已收到消息。
     publisher-confirm-type: correlated
     publisher-returns: true
-    # 当前尚未实现业务拓扑，由后续消息功能显式声明队列与绑定。
-    dynamic: false
+    # RabbitAdmin 声明持久分发、重试、死信与本机独占网关队列。
+    dynamic: true
     template:
       mandatory: true
     listener:
       simple:
         acknowledge-mode: manual
+        prefetch: 10
+        concurrency: 1
+        max-concurrency: 2
       direct:
         acknowledge-mode: manual
 

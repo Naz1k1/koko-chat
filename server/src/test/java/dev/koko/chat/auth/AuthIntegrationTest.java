@@ -23,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** 仅显式启用时连接本机开发中间件；只清理本测试创建的随机账号，不清空业务表。 */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "koko.netty.port=0")
 @ActiveProfiles("local")
+@org.springframework.test.annotation.DirtiesContext
 @EnabledIfEnvironmentVariable(named="KOKO_CHAT_AUTH_TEST", matches="true")
 class AuthIntegrationTest {
     @Autowired TestRestTemplate http;
@@ -94,7 +95,7 @@ class AuthIntegrationTest {
             a.send(Map.of("v",1,"type","PING","requestId","heartbeat-1"));
             assertThat(a.next().path("requestId").asText()).isEqualTo("heartbeat-1");
             a.send(Map.of("v",1,"type","SEND"));
-            assertThat(a.next().path("code").asText()).isEqualTo("NOT_IMPLEMENTED");
+            assertThat(a.next().path("code").asText()).isEqualTo("INVALID_MESSAGE");
             // 已消费的票据、过期票据和伪造票据均无法再认证。
             for (String rejected : List.of(aliceTicket, "a".repeat(43))) {
                 try(var replay=connect(client)) {
