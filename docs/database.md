@@ -1,17 +1,18 @@
 # 数据库文件与迁移说明
 
-数据库采用 MySQL 8.4、InnoDB、utf8mb4，首个 Flyway 版本建立 9 张业务表。SQL 中已包含中文表说明、字段说明、索引及约束。当前已实现认证、好友、文本单聊与 MQ 分发；好友申请和双向关系直接复用 V1 表，未改写已应用迁移。认证字段通过 V2 演进。
+数据库采用 MySQL 8.4、InnoDB、utf8mb4，首个 Flyway 版本建立 9 张业务表。SQL 中已包含中文表说明、字段说明、索引及约束。当前已实现认证、好友、文本单聊/群聊与 MQ 分发；好友申请和双向关系直接复用 V1 表，未改写已应用迁移。认证字段通过 V2 演进；V3 新增 group_command，当前共 10 张业务表。
 
 ## 文件入口
 
 | 文件 | 用途 |
 | --- | --- |
 | [00-create-database.sql](../deploy/mysql/00-create-database.sql) | 在已有 MySQL 实例中创建 koko_chat 空库，不创建用户和密码 |
-| [V1__create_chat_schema.sql](../server/src/main/resources/db/migration/V1__create_chat_schema.sql) | 唯一的业务建表来源，由 Flyway 执行并记录版本 |
+| [V1__create_chat_schema.sql](../server/src/main/resources/db/migration/V1__create_chat_schema.sql) | 首批 9 张业务表，由 Flyway 执行并记录版本 |
+| [V3__create_group_command.sql](../server/src/main/resources/db/migration/V3__create_group_command.sql) | 群操作去重记录，与群及成员修改同事务提交 |
 | [MySqlSchemaTest.java](../server/src/test/java/dev/koko/chat/database/MySqlSchemaTest.java) | 显式启用的 MySQL 8.4 迁移和约束验证，使用独立临时库 |
 | [Preferences.sq](../apps/desktop/src/main/sqldelight/dev/koko/chat/desktop/data/Preferences.sq) | 桌面 SQLite 设置表，由 SQLDelight 生成建表及查询代码 |
 
-不提交运行时的 MySQL 数据目录或桌面 `.db` 文件。桌面消息缓存、同步游标与待发送队列将在客户端对应功能阶段添加；当前 SQLite 只存服务设置。
+不提交运行时的 MySQL 数据目录或桌面 `.db` 文件。桌面设置库之外已建立账号独立的消息缓存、连续游标与待发送队列，群和单聊复用 ChatCache.sq；群管理的待确认操作当前只保存在内存。
 
 ## 表与查询路径
 
@@ -25,6 +26,7 @@
 | conversation_member | 当前成员关系、角色、可见起点、成员周期、用户读进度 | 会话+用户联合主键；用户会话列表和群扇出索引 |
 | message | 在线、离线共用的消息正文及原发送者周期 | sender_id + client_msg_id、conversation_id + seq 两组唯一约束 |
 | device_cursor | 各设备在特定成员周期的连续接收进度镜像 | 用户+设备+会话+成员周期联合主键 |
+| group_command | 成功群操作的请求摘要和群 ID | 用户+client_command_id 唯一；群外键约束 |
 | message_outbox | 与消息同事务提交的待发布事件 | 消息+事件类型唯一；待发布、过期租约、已发布清理索引 |
 
 好友申请的唯一键只约束 PENDING 记录。申请被接受、拒绝或取消后，生成列变为 NULL，允许未来再次申请；相反方向的新申请也不能绕过待处理限制。群聊共享 message 正文，不建立独立群消息表或离线消息正文表。

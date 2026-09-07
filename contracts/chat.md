@@ -1,19 +1,20 @@
-# 文本单聊协议（已实现）
+# 文本聊天协议（单聊与群聊已实现）
 
-适用于 `local` 配置，当前系统信息 `stage=contacts`（包含上一阶段单聊能力）。HTTP 使用访问令牌；WebSocket 先按 [认证契约](auth.md) 取得 `AUTH_OK`。所有 ID、seq 均为十进制字符串，客户端按整数比较；当前范围为 Java 正数 Long。时间为 UTC ISO-8601。
+适用于 `local` 配置，当前系统信息 `stage=groups`（包含上一阶段单聊能力）。HTTP 使用访问令牌；WebSocket 先按 [认证契约](auth.md) 取得 `AUTH_OK`。所有 ID、seq 均为十进制字符串，客户端按整数比较；当前范围为 Java 正数 Long。时间为 UTC ISO-8601。
 
 ## 会话与补拉
 
 | 请求 | 参数 / 行为 |
 | --- | --- |
-| `POST /api/conversations/direct` | JSON `{"account":"bob"}`，按准确账号查找；禁止自己。双方的数值 ID 排序生成唯一键，重复请求返回同一会话，成功 HTTP 200。当前无需好友关系。 |
-| `GET /api/conversations` | `afterId=0&limit=50`；limit 1–100，按会话 ID 升序返回。只包含当前有效单聊。 |
+| `POST /api/conversations/direct` | JSON `{"account":"bob"}`，按准确账号查找；禁止自己。双方的数值 ID 排序生成唯一键，重复请求返回同一会话，成功 HTTP 200。当前无需好友关系。群聊通过 [群管理接口](groups.md) 创建。 |
+| `GET /api/conversations` | `afterId=0&limit=50`；limit 1–100，按会话 ID 升序返回。包含当前有效单聊与群聊。 |
+| `GET /api/conversations/{id}` | 返回一个当前可访问的会话摘要；供新增会话和缺失目录项核验。 |
 | `GET /api/conversations/{id}/messages` | `afterSeq=0&toSeq=20&limit=50`；limit 1–100，返回 `(afterSeq,toSeq]` 可见消息，按 seq 升序。首次可省略 toSeq，后续沿用响应上界。 |
 
 会话对象：
 
 ```json
-{"id":"10","peerId":"2","account":"bob","nickname":"小波","membershipEpoch":"b6a403c9-334c-4f7b-af1c-019bcd8ca15c","visibleFromSeq":"1","latestSeq":"20"}
+{"id":"10","peerId":"2","account":"bob","nickname":"小波","membershipEpoch":"b6a403c9-334c-4f7b-af1c-019bcd8ca15c","visibleFromSeq":"1","latestSeq":"20","type":"DIRECT","ownerId":null}
 ```
 
 会话列表响应为 `{"conversations":[...],"nextCursor":"10","hasMore":false}`。ID 为随机正 Long，分页期间新建且 ID 小于游标的会话可能到下轮全量目录同步才出现；目录不是快照令牌。
@@ -67,3 +68,5 @@
 | BUSY / OUTBOX_FULL / SERVICE_UNAVAILABLE | 稍后使用同一 clientMsgId 重试 |
 
 客户端目前每 2 秒检查到期待发送记录、每 10 秒补拉；请求超时 10 秒。失败待发送记录可手动重试，但不会篡改原内容或原成员周期。登录账号切换时取消旧任务、关闭旧库，再打开该服务和用户的独立 SQLite 文件。
+
+群会话的 peerId/account 为 null，nickname 为群展示名，type=GROUP，ownerId 为群主 ID。成员变更与历史/回执检查共用会话锁，详情见 [群协议](groups.md)。

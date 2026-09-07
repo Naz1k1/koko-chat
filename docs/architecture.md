@@ -1,6 +1,6 @@
 # koko-chat 架构设计
 
-日期：2026-09-08。状态：架构基线 v1，已完成认证、好友与单聊最小闭环。当前实现范围以 [项目说明](../README.md) 为准；架构图中的业务组件仍是目标设计，不代表已有完整功能或压测结果。
+日期：2026-09-08。状态：架构基线 v1，已完成认证、好友、单聊与群聊最小闭环。当前实现范围以 [项目说明](../README.md) 为准；架构图中的业务组件仍是目标设计，不代表已有完整功能或压测结果。
 
 ## 1. 约束与结论
 
@@ -282,7 +282,8 @@ MESSAGE 至少携带 messageId、conversationId、seq、senderId、serverTime、
 | POST /api/conversations/direct | 幂等创建双方单聊会话 |
 | POST /api/groups | 创建群会话 |
 | POST /api/groups/{id}/members | 邀请/添加成员，校验权限和人数 |
-| DELETE /api/groups/{id}/members/{userId} | 退出或移除成员，按身份校验 |
+| POST /api/groups/{id}/members/{userId}/remove | 群主移除成员，携带命令编号和目标周期 |
+| POST /api/groups/{id}/leave、/close | 普通成员退出 / 群主解散，携带命令编号 |
 | GET /api/conversations?cursor=…&limit=… | 有权限访问的会话及 membershipEpoch、visibleFromSeq、latestSeq、lastReadSeq |
 | GET /api/conversations/{id}/messages?beforeSeq=…&limit=… | 向前翻页历史 |
 | GET /api/conversations/{id}/messages?afterSeq=…&toSeq=…&limit=… | 按连续游标增量补拉 |

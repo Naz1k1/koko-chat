@@ -1,6 +1,6 @@
 # Kotlin 桌面客户端设计
 
-状态：架构基线 v1，当前已实现认证、好友管理、文本单聊、账号独立 SQLite 缓存与历史补拉，运行及验证范围见 [桌面工程说明](../apps/desktop/README.md) 和 [单聊验收](chat-verification.md)。本文描述完整目标；群聊、已读及历史列表向上翻页等仍为后续实现契约，与 [整体架构](architecture.md) 和 [RabbitMQ 设计](messaging.md) 配套。
+状态：架构基线 v1，当前已实现认证、好友管理、文本单聊与群聊、账号独立 SQLite 缓存与历史补拉，运行及验证范围见 [桌面工程说明](../apps/desktop/README.md) 和 [单聊验收](chat-verification.md)。本文描述完整目标；已读及历史列表向上翻页等仍为后续实现契约，与 [整体架构](architecture.md) 和 [RabbitMQ 设计](messaging.md) 配套。
 
 ## 1. 技术与构建边界
 
