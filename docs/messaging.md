@@ -66,7 +66,7 @@ exchange、queue、binding 在部署/启动时声明并校验，必需 binding �
 
 ## 4. 发布确认与数据库一致性
 
-message_outbox 初始状态为 PENDING。Publisher 用数据库短事务取得租约，在事务外发布，状态可以为 PENDING → PUBLISHING → PUBLISHED；租约到期重新认领，持续错误记录 last_error 并报警。
+message_outbox 初始状态为 PENDING。Publisher 用数据库短事务取得租约，在事务外发布，状态可以为 PENDING → PUBLISHING → PUBLISHED；租约到期重新认领，持续错误记录 last_error 并报警。每次认领生成新的 lease_token，完成或失败更新必须匹配该令牌，避免过期发布者覆盖新的认领状态；具体字段见 [数据库说明](database.md)。
 
 生产者设置持久消息属性，使用 correlated publisher confirms，开启 mandatory 和 returns。只有该次发布 confirm=ACK 且未返回 unroutable，才把 outbox 标记为 PUBLISHED。
 

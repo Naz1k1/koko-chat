@@ -45,12 +45,12 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 | `RABBITMQ_HOST` / `RABBITMQ_PORT` | `127.0.0.1` / `5672` |
 | `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `koko` / 密码必须从环境变量提供 |
 
-`local` 启用数据源、Redis、RabbitMQ 和 Flyway 基础配置；没有业务 Mapper、表迁移、队列声明或消费者。RabbitMQ 已配置 correlated confirms、returns、mandatory 和 manual ACK，为后续实现预留。Actuator health 会反映 local 中间件连接状态；健康探针不代表 MQ 拓扑或聊天业务已经就绪。
+`local` 启用数据源、Redis、RabbitMQ 和 Flyway；首次迁移创建账号、好友、会话、消息、游标与 Outbox 共 9 张业务表，详情见 [数据库文件与迁移说明](../docs/database.md)。当前尚无业务 Mapper、队列声明或消费者。RabbitMQ 已配置 correlated confirms、returns、mandatory 和 manual ACK，为后续实现预留。Actuator health 会反映 local 中间件连接状态；健康探针不代表 MQ 拓扑或聊天业务已经就绪。
 
 版本依据：[Spring Boot 3.5 官方要求](https://docs.spring.io/spring-boot/3.5/system-requirements.html)、[MyBatis 官方兼容表](https://mybatis.org/spring-boot-starter/mybatis-spring-boot-autoconfigure/)。
 
 ## 验证范围
 
-`./mvnw verify` 包含 10 项自动测试：真实随机端口 HTTP/Actuator 与 WebSocket 探针、应用/控制帧心跳、未实现认证与未认证 SEND 拒绝、非法 JSON/版本、分片聚合及大小限制、二进制拒绝、错误握手路径、未认证连接期限、关闭连接并释放端口、端口占用导致 Spring 启动失败且不残留 EventLoop 线程。
+`./mvnw verify` 包含 10 项常规自动测试：真实随机端口 HTTP/Actuator 与 WebSocket 探针、应用/控制帧心跳、未实现认证与未认证 SEND 拒绝、非法 JSON/版本、分片聚合及大小限制、二进制拒绝、错误握手路径、未认证连接期限、关闭连接并释放端口、端口占用导致 Spring 启动失败且不残留 EventLoop 线程。另有 MySqlSchemaTest，只有显式提供测试连接时才运行，默认跳过；配置方法见数据库说明。
 
 这批测试已在 JDK 21 上通过，未连接外部中间件。`local` 的真实 MySQL/Redis/RabbitMQ 连通性及 MQ 拓扑、登录和聊天业务不在本次骨架验证范围内。

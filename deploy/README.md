@@ -2,6 +2,8 @@
 
 后端默认骨架模式不依赖 Docker。需要验证 `local` 配置时，再启动 MySQL 8.4、Redis 7.4、RabbitMQ 4.2；这些都是独立开发服务。
 
+业务表由后端 Flyway V1 统一建立，Compose 仅负责创建空库和中间件。使用已有 MySQL 实例时，可参考 [数据库说明](../docs/database.md) 和 [建库脚本](mysql/00-create-database.sql)。
+
 在仓库根目录执行：
 
 ```bash

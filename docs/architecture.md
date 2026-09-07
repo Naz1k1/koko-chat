@@ -201,7 +201,7 @@ RabbitMQ 消费失败采用有限延迟重试和死信队列；重试/DLQ 转发
 | message_outbox | id/event_id、message_id、事件类型、payload、状态、lease_until、next_attempt_at、attempts、published_at、last_error | 与消息同事务提交，记录 MQ 发布进度 |
 | auth_session | user_id、device_id、令牌摘要、过期时间、撤销状态 | 登录会话和刷新凭证管理 |
 
-采用 MySQL 8.4 + InnoDB + utf8mb4，通过数据库迁移脚本管理表结构。ID 与 seq 在 JSON 中统一使用字符串；Kotlin 收到 seq 后按数值解析和排序，不能按字符串字典序比较。服务端时间统一 UTC，界面按用户时区显示。上述是逻辑模型，实施时再生成 DDL 和索引迁移。
+采用 MySQL 8.4 + InnoDB + utf8mb4，通过数据库迁移脚本管理表结构。ID 与 seq 在 JSON 中统一使用字符串；Kotlin 收到 seq 后按数值解析和排序，不能按字符串字典序比较。服务端时间统一 UTC，界面按用户时区显示。首期 9 张业务表已落入 Flyway V1，具体字段、索引和应用事务边界见 [数据库说明](database.md)。
 
 ## 10. 多节点演进与参考图对应关系
 

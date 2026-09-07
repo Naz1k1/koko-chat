@@ -50,6 +50,7 @@ cd apps/desktop
 ## 设计文档
 
 - [当前骨架协议与 JSON Schema](contracts/README.md)
+- [数据库建表文件、字段与迁移方法](docs/database.md)
 - [架构设计、技术选型与实施顺序](docs/architecture.md)
 - [Kotlin 桌面端：模块、状态、同步与打包](docs/desktop.md)
 - [RabbitMQ 设计：队列拓扑、确认、重试与死信](docs/messaging.md)
