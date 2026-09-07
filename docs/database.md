@@ -82,3 +82,9 @@ export KOKO_CHAT_MYSQL_TEST_USER=root
 本次已通过 SQLGlot 28.0.0 的 MySQL 方言静态解析（1 条建库、9 条建表）、约束名检查、迁移资源打包核对和前后端常规测试。当前环境未运行 Docker/MySQL，本次没有对应用数据库执行 SQL；真实迁移测试因缺少连接配置而跳过，静态解析不能代替 MySQL 引擎执行验证。
 
 语法与约束依据：[MySQL 8.4 建表语法](https://dev.mysql.com/doc/refman/8.4/en/create-table.html)、[CHECK 约束](https://dev.mysql.com/doc/refman/8.4/en/create-table-check-constraints.html)、[外键规则](https://dev.mysql.com/doc/refman/8.4/en/create-table-foreign-keys.html)。
+
+## V2：认证访问令牌
+
+`V2__add_access_tokens.sql` 为 `auth_session` 增加访问令牌摘要和到期时间，并通过生成列约束同用户同设备只能存在一个未撤销会话。旧会话的新增列允许为空，不能凭空获得访问权限，需重新登录。V1 保持不变。
+
+2026-09-07 已在本机 MySQL 8.4 实际执行 V1/V2，验证重复迁移无操作、消息幂等约束、外键、Outbox 状态及事务回滚；测试结束删除独立临时库。
