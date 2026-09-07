@@ -72,6 +72,20 @@ services:
       retries: 12
       start_period: 30s
 
+  coturn:
+    image: coturn/coturn:4.17.2-r0
+    profiles: ["calls"]
+    environment:
+      KOKO_TURN_SECRET: ${KOKO_TURN_SECRET:-}
+      TURN_EXTERNAL_IP: ${TURN_EXTERNAL_IP:-127.0.0.1}
+    entrypoint: ["/bin/sh", "-ec"]
+    command:
+      - 'test -n "$$KOKO_TURN_SECRET"; exec turnserver -n --log-file=stdout --no-tls --pidfile=/tmp/turnserver.pid --fingerprint --use-auth-secret --static-auth-secret="$$KOKO_TURN_SECRET" --realm=koko-chat --listening-ip=0.0.0.0 --relay-ip="$$(hostname -i | cut -d " " -f 1)" --external-ip="$$TURN_EXTERNAL_IP" --listening-port=3478 --min-port=49160 --max-port=49179 --allow-loopback-peers --user-quota=4 --total-quota=40 --no-multicast-peers'
+    ports:
+      - "127.0.0.1:3478:3478/udp"
+      - "127.0.0.1:3478:3478/tcp"
+      - "127.0.0.1:49160-49179:49160-49179/udp"
+
 volumes:
   mysql-data:
   redis-data:
