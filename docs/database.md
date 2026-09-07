@@ -1,6 +1,6 @@
 # 数据库文件与迁移说明
 
-数据库采用 MySQL 8.4、InnoDB、utf8mb4，首个 Flyway 版本建立 9 张业务表。SQL 中已包含中文表说明、字段说明、索引及约束。当前已实现认证、好友、文本单聊/群聊、已读/未读与 MQ 分发；好友申请和双向关系直接复用 V1 表，未改写已应用迁移。认证字段通过 V2 演进；V3 新增 group_command，当前共 10 张业务表。
+数据库采用 MySQL 8.4、InnoDB、utf8mb4，首个 Flyway 版本建立 9 张业务表。SQL 中已包含中文表说明、字段说明、索引及约束。当前已实现认证、好友、文本单聊/群聊、已读/未读与 MQ 分发；好友申请和双向关系直接复用 V1 表，未改写已应用迁移。认证字段通过 V2 演进；V3 新增 group_command，V4 新增 attachment，当前共 11 张业务表。
 
 ## 文件入口
 
@@ -9,6 +9,7 @@
 | [00-create-database.sql](../deploy/mysql/00-create-database.sql) | 在已有 MySQL 实例中创建 koko_chat 空库，不创建用户和密码 |
 | [V1__create_chat_schema.sql](../server/src/main/resources/db/migration/V1__create_chat_schema.sql) | 首批 9 张业务表，由 Flyway 执行并记录版本 |
 | [V3__create_group_command.sql](../server/src/main/resources/db/migration/V3__create_group_command.sql) | 群操作去重记录，与群及成员修改同事务提交 |
+| [V4__create_attachments.sql](../server/src/main/resources/db/migration/V4__create_attachments.sql) | 附件元数据、状态约束与 message.attachment_id 外键 |
 | [MySqlSchemaTest.java](../server/src/test/java/dev/koko/chat/database/MySqlSchemaTest.java) | 显式启用的 MySQL 8.4 迁移和约束验证，使用独立临时库 |
 | [Preferences.sq](../apps/desktop/src/main/sqldelight/dev/koko/chat/desktop/data/Preferences.sq) | 桌面 SQLite 设置表，由 SQLDelight 生成建表及查询代码 |
 
@@ -27,6 +28,7 @@
 | message | 在线、离线共用的消息正文及原发送者周期 | sender_id + client_msg_id、conversation_id + seq 两组唯一约束 |
 | device_cursor | 各设备在特定成员周期的连续接收进度镜像 | 用户+设备+会话+成员周期联合主键 |
 | group_command | 成功群操作的请求摘要和群 ID | 用户+client_command_id 唯一；群外键约束 |
+| attachment | 上传元数据、文件摘要、所属会话/成员周期与绑定消息 | UUID 主键；object_key、message_id 唯一；状态/大小 CHECK；用户及会话外键 |
 | message_outbox | 与消息同事务提交的待发布事件 | 消息+事件类型唯一；待发布、过期租约、已发布清理索引 |
 
 好友申请的唯一键只约束 PENDING 记录。申请被接受、拒绝或取消后，生成列变为 NULL，允许未来再次申请；相反方向的新申请也不能绕过待处理限制。群聊共享 message 正文，不建立独立群消息表或离线消息正文表。
@@ -102,3 +104,11 @@ MySQL 继续复用 V1 的 conversation_member.last_read_seq 与 device_cursor，
 [ChatCache.sq](../apps/desktop/src/main/chatdb/dev/koko/chat/desktop/data/chat/ChatCache.sq) 增加按 conversation_id、epoch 和 seq 查询的 olderMessages、messagesFrom、hasMessagesBefore，复用现有联合唯一索引。向前分页使用 `seq < beforeSeq ORDER BY seq DESC LIMIT 50`，返回展示前转为升序，避免 OFFSET 随新消息到来发生偏移；visibleFromSeq 和当前成员周期限制仍有效。
 
 展开后的刷新从当前展示起点读取至本地最新，切换会话/周期或返回最新恢复默认 200 条。分页不写消息、不推进 received_seq 或 last_read_seq，只改变当前界面的展示范围。本阶段只有查询变化，无新增 SQLite 表或迁移，消息库版本仍为 v2；MySQL V1–V3 同样未修改。
+
+## V4：RustFS 附件与 SQLite v3
+
+V1–V3 保持原样，V4 新增 attachment，并扩展 message.type 为 TEXT/EMOJI/IMAGE/FILE、增加 attachment_id 外键。文件字节存 RustFS；数据库保存业务归属和不可变引用。attachment.message_id 用唯一键与状态 CHECK 限制绑定形状，不反向声明消息外键以避免循环依赖；实际绑定由 Service 和 message.attachment_id 外键保证，同消息、序号、Outbox 一起提交。按依赖清理测试数据时先删 message，再删 attachment。
+
+SQLite [2.sqm](../apps/desktop/src/main/chatdb/dev/koko/chat/desktop/data/chat/2.sqm) 将消息库从 v2 升为 v3：pending_message 增加 attachment_id，pending_upload 保存可重发元数据；上传字节保存在账号哈希目录。已用包含消息的真实 v1 结构验证连续升级到 v3，原消息和游标保留。
+
+2026-09-08 已在真实 MySQL 8.4 独立临时库验证 V1–V4 首次执行和重复执行，共 11 张业务表；应用 local 数据库也已迁移到 V4。附件测试验证消息/附件/Outbox 回滚、重复发送和群成员可见范围，详见 [附件验收](attachment-verification.md)。本段为当前验证结论，上文首批建表的静态检查记录属于历史阶段。

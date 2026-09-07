@@ -13,7 +13,7 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 
 也可执行 `java -jar target/koko-chat-server-0.1.0-SNAPSHOT.jar`。默认 `skeleton` profile 不创建 MySQL、Redis、RabbitMQ 客户端，因此无需启动中间件。
 
-- `GET http://127.0.0.1:8080/api/system/info`：`{name, version, stage, httpPort, imPort, imPath}`，`stage` 在默认模式为 `skeleton`，`local` 为 `read-receipts`。
+- `GET http://127.0.0.1:8080/api/system/info`：`{name, version, stage, httpPort, imPort, imPath}`，`stage` 在默认模式为 `skeleton`，`local` 为 `attachments`。
 - `GET http://127.0.0.1:8080/actuator/health`：进程及 Netty 正常时返回 `{"status":"UP"}`。
 - `ws://127.0.0.1:8081/im`：WebSocket 握手、控制帧 PING/PONG、JSON v1 应用心跳。TLS 由后续部署入口终止，本地骨架使用 HTTP / WS。
 
@@ -45,7 +45,7 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 | `RABBITMQ_HOST` / `RABBITMQ_PORT` | `127.0.0.1` / `5672` |
 | `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `koko` / 密码必须从环境变量提供 |
 
-`local` 启用数据源、Redis、RabbitMQ 和 Flyway；首次迁移创建账号、好友、会话、消息、游标与 Outbox 共 9 张业务表，详情见 [数据库文件与迁移说明](../docs/database.md)。认证 Mapper 已接入账号与登录会话，V2 增加访问令牌摘要，V3 增加群操作去重表，当前共 10 张业务表。RabbitMQ 已声明持久分发、重试、死信与临时网关队列，配置 correlated confirms、returns、mandatory 和 manual ACK。Actuator health 会反映 local 中间件连接状态；健康探针不代表 MQ 拓扑或聊天业务已经就绪。
+`local` 启用数据源、Redis、RabbitMQ 和 Flyway；首次迁移创建账号、好友、会话、消息、游标与 Outbox 共 9 张业务表，详情见 [数据库文件与迁移说明](../docs/database.md)。认证 Mapper 已接入账号与登录会话，V2 增加访问令牌摘要，V3 增加群操作去重表，V4 增加附件元数据及消息引用，当前共 11 张业务表。RabbitMQ 已声明持久分发、重试、死信与临时网关队列，配置 correlated confirms、returns、mandatory 和 manual ACK。Actuator health 会反映 local 中间件连接状态；健康探针不代表 MQ 拓扑或聊天业务已经就绪。
 
 版本依据：[Spring Boot 3.5 官方要求](https://docs.spring.io/spring-boot/3.5/system-requirements.html)、[MyBatis 官方兼容表](https://mybatis.org/spring-boot-starter/mybatis-spring-boot-autoconfigure/)。
 
@@ -60,3 +60,9 @@ MySQL、Redis、RabbitMQ 的开发实例已通过真实健康检查；健康检�
 好友 HTTP 端点、重试语义和权限规则见 [联系人契约](../contracts/contacts.md)。好友关系写入复用 V1 表，未修改已应用的迁移。
 
 群管理协议见 [群聊契约](../contracts/groups.md)。V3 新增 group_command，与群操作同事务写入，保证成功操作的重试不会重复产生副作用。
+
+## RustFS 附件
+
+`attachment` 包采用 Controller → Service → Mapper 常规分层，`RustFsStorage` 通过 AWS SDK v2 连接私有桶。上传校验长度、摘要与图片格式；MySQL 附件绑定和消息/Outbox 同事务；下载重新校验当前成员及可见序号。HTTP 转传文件字节，Netty 和 RabbitMQ 仍负责消息引用。参数和错误码见 [附件契约](../contracts/attachments.md)，环境和物理存储位置见 [部署说明](../deploy/README.md)。
+
+真实附件测试包含在 `verify-auth.sh`，需要 RustFS 启动且 `.env` 有对应凭证。`AttachmentTestCleanup` 仅供桌面联调脚本定向清理本次随机测试账号的对象，不是运行时接口或通用垃圾回收器。

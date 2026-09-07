@@ -41,7 +41,7 @@ Netty 是服务端网络框架，WebSocket 是通信协议，两者可以同时�
 
 - HTTPS：登录、刷新凭证、好友和群组管理、会话列表、历史分页、增量同步。
 - WSS：发送消息、服务端保存确认、实时推送、设备接收确认、已读更新、心跳和在线状态通知。
-- 大文件后续走 HTTPS 上传到对象存储；WSS 只传文件元数据和消息引用。
+- 图片/文件现经认证 HTTP(S) 转存到 RustFS 私有桶，单文件最多 10 MiB；WSS 只传文件元数据和消息引用。
 
 Netty 的 `WebSocketServerProtocolHandler` 负责握手与 WebSocket 控制帧，业务 Handler 处理文本/二进制消息。原 IM 的裸 TCP 端口不能直接当成 WSS 地址，需要增加对应的 Netty pipeline。[Netty 官方 API](https://netty.io/4.1/api/io/netty/handler/codec/http/websocketx/WebSocketServerProtocolHandler.html)
 
@@ -326,3 +326,9 @@ Spring Boot 3.5.x 支持 Java 21，可作为这一设计的 3.x 基线；实施�
 新项目重新设计：桌面 UI、跨语言协议、身份认证、消息 ID/序号/确认、历史分页与增量同步、消息事务、会话路由和数据库迁移。原先每会话只取 10 条、异步入库就推送、仅凭 userId 重连等实现不直接沿用。
 
 图与本文给出的是业务实现契约。基础进程与协议探针逐步落入工程骨架，当前已实现文本聊天与已读闭环，尚无容量测试结论；具体已实现内容与运行命令见项目及各端 README。
+
+## 已落地补充：RustFS 附件
+
+服务端增加 attachment 业务包，仍使用普通 Controller / Handler → Service → Mapper，不引入 DDD 或单独微服务。RustFS 作为 S3 对象存储，MySQL 保留文件归属和消息引用，Redis/Netty 会话及 RabbitMQ 分发职责不变。先登记并转存文件，随后将附件绑定与 message/Outbox 同事务提交；数据库不与 S3 做跨资源事务，失败依赖原编号与不可变内容重试。下载每次从业务权限入口进入。
+
+桌面 Kotlin / Compose 使用系统文件选择器、账号独立副本与 SQLite 待发送记录；可以预览图片和保存文件。详细状态、错误与边界见 [附件契约](../contracts/attachments.md)。原首期架构图属于设计基线，本节描述当前增加的 RustFS 实现；缩略图、续传、配额和孤立对象清理尚未实现。

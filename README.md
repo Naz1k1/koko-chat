@@ -1,8 +1,8 @@
 # koko-chat
 
-桌面即时通信项目。客户端采用 **Kotlin + Compose Desktop**；服务端采用 **Java 21 + Spring Boot 3.5.x + Netty + RabbitMQ + MySQL + Redis**，按 Controller / Handler → Service → Mapper 常规分层组织。
+桌面即时通信项目。客户端采用 **Kotlin + Compose Desktop**；服务端采用 **Java 21 + Spring Boot 3.5.x + Netty + RabbitMQ + MySQL + Redis + RustFS**，按 Controller / Handler → Service → Mapper 常规分层组织。
 
-当前已完成账号认证、好友与文本单聊/群聊闭环：注册登录、令牌刷新、Netty 认证与心跳、好友申请与接受/拒绝、联系人列表、按准确账号建立单聊、建群与邀请/移除/退出/解散、消息与 Outbox 同事务保存、RabbitMQ 分发、设备接收回执、离线补拉，以及中文桌面聊天界面与账号独立的 SQLite 消息缓存。现已支持用户已读回执、会话未读计数、跨设备读进度同步、断线补报，以及历史消息向前分页和阅读位置保持；文件消息仍待实现。桌面端采用 MVVM + StateFlow、Ktor HTTPS/WSS、SQLDelight + SQLite，两端统一使用 JDK 21。
+当前已完成账号认证、好友与文本单聊/群聊闭环：注册登录、令牌刷新、Netty 认证与心跳、好友申请与接受/拒绝、联系人列表、按准确账号建立单聊、建群与邀请/移除/退出/解散、消息与 Outbox 同事务保存、RabbitMQ 分发、设备接收回执、离线补拉，以及中文桌面聊天界面与账号独立的 SQLite 消息缓存。现已支持用户已读回执、会话未读计数、跨设备读进度同步、断线补报，以及历史消息向前分页和阅读位置保持；现已接入 RustFS 私有存储，支持图片/文件上传、消息引用、权限下载、桌面图片预览与断线重试。桌面端采用 MVVM + StateFlow、Ktor HTTPS/WSS、SQLDelight + SQLite，两端统一使用 JDK 21。
 
 ## 后端启动
 
@@ -22,7 +22,7 @@ cd server
 
 这里的明文地址用于本机开发；部署时配置 HTTPS/WSS 入口。心跳成功只证明传输可用，不能视为登录成功或消息已送达。
 
-后端配置、协议探针和测试见 [后端说明](server/README.md)。需要连接 MySQL、Redis、RabbitMQ 时，按 [本机中间件说明](deploy/README.md) 启动服务并启用 `local` 配置。
+后端配置、协议探针和测试见 [后端说明](server/README.md)。需要连接 MySQL、Redis、RabbitMQ、RustFS 时，按 [本机中间件说明](deploy/README.md) 启动服务并启用 `local` 配置。
 
 ## 桌面端启动
 
@@ -59,6 +59,8 @@ cd apps/desktop
 - [群聊阶段验收记录与界面](docs/group-verification.md)
 - [已读回执、未读计数与多设备验收](docs/read-verification.md)
 - [历史分页、阅读位置与批量消息验收](docs/history-verification.md)
+- [RustFS 附件接口与权限契约](contracts/attachments.md)
+- [附件阶段验收与界面](docs/attachment-verification.md)
 - [数据库建表文件、字段与迁移方法](docs/database.md)
 - [架构设计、技术选型与实施顺序](docs/architecture.md)
 - [Kotlin 桌面端：模块、状态、同步与打包](docs/desktop.md)
@@ -81,4 +83,4 @@ RabbitMQ 已参与单聊与群聊主链路：Outbox → 持久分发队列 → �
 ./scripts/verify-desktop-auth.sh
 ```
 
-第三个脚本使用已构建的后端 JAR，在 18080/18081 启动临时服务，验证双客户端认证、好友申请与拒绝/接受、联系人聊天、三客户端群聊和成员隔离、真实 MQ 推送、确认丢失重试与离线补拉、三客户端已读同步、READ_ACK 丢失重试和通知丢失后的快照恢复、325 条消息的历史分页，然后退出并定向清理本次账号和聊天数据。原有服务端口被占用时会拒绝启动；可用 `KOKO_CHAT_VERIFY_HTTP_PORT` / `KOKO_CHAT_VERIFY_IM_PORT` 更换测试端口。
+第三个脚本使用已构建的后端 JAR，在 18080/18081 启动临时服务，验证双客户端认证、好友申请与拒绝/接受、联系人聊天、三客户端群聊和成员隔离、真实 MQ 推送、确认丢失重试与离线补拉、三客户端已读同步、READ_ACK 丢失重试和通知丢失后的快照恢复、325 条消息的历史分页、RustFS 附件上传响应丢失后的重试和接收方保存/预览，然后退出并定向清理本次账号、聊天数据和附件对象。原有服务端口被占用时会拒绝启动；可用 `KOKO_CHAT_VERIFY_HTTP_PORT` / `KOKO_CHAT_VERIFY_IM_PORT` 更换测试端口。

@@ -1,6 +1,6 @@
 # 文本聊天协议（单聊与群聊已实现）
 
-适用于 `local` 配置，当前系统信息 `stage=read-receipts`（包含上一阶段单聊能力）。HTTP 使用访问令牌；WebSocket 先按 [认证契约](auth.md) 取得 `AUTH_OK`。所有 ID、seq 均为十进制字符串，客户端按整数比较；当前范围为 Java 正数 Long。时间为 UTC ISO-8601。
+适用于 `local` 配置，当前系统信息 `stage=attachments`（包含上一阶段单聊能力）。HTTP 使用访问令牌；WebSocket 先按 [认证契约](auth.md) 取得 `AUTH_OK`。用户/会话/消息 ID、seq 均为十进制字符串，客户端按整数比较；当前范围为 Java 正数 Long。时间为 UTC ISO-8601。
 
 ## 会话与补拉
 
@@ -99,3 +99,7 @@ READ_UPDATE 是可丢失的状态提示，复用有界临时网关队列，不�
 HTTP 历史补拉接口保持不变。桌面默认显示最近 200 条已缓存消息，“加载更早消息”按当前最小 seq 向前查询至多 50 条，在会话和成员周期内保留已展开范围。该展示操作独立于 HTTP 补拉游标、RECEIVED_ACK 与 READ，不创建新网络命令或修改服务端进度。
 
 收到新消息或 READ_UPDATE 后刷新已展开范围，消息稳定 key 保持阅读位置；切换会话/账号/成员周期或显式返回最新时重置。未同步到本地的历史仍通过已有的正向分页补齐，不把本地暂时无更早数据解释成服务端没有历史。
+
+## 附件扩展
+
+SEND 可使用 attachmentId 代替 text，响应与历史消息增加可空的 attachment；IMAGE/FILE 复用本协议的消息序号、幂等、接收和已读语义。具体上传、私有下载和重试规则见 [附件契约](attachments.md)。附件 UUID 不属于正数 Long ID。

@@ -1,8 +1,8 @@
 # 本机中间件
 
-后端默认骨架模式不依赖 Docker。需要验证 `local` 配置时，再启动 MySQL 8.4、Redis 7.4、RabbitMQ 4.2；这些都是独立开发服务。
+后端默认骨架模式不依赖 Docker。需要验证 `local` 配置时，再启动 MySQL 8.4、Redis 7.4、RabbitMQ 4.2、RustFS 1.0.0-rc.5；这些都是独立开发服务。
 
-业务表由后端 Flyway V1 统一建立，Compose 仅负责创建空库和中间件。使用已有 MySQL 实例时，可参考 [数据库说明](../docs/database.md) 和 [建库脚本](mysql/00-create-database.sql)。
+业务表由后端 Flyway V1–V4 顺序迁移建立，Compose 仅负责创建空库和中间件。使用已有 MySQL 实例时，可参考 [数据库说明](../docs/database.md) 和 [建库脚本](mysql/00-create-database.sql)。
 
 在仓库根目录执行：
 
@@ -34,7 +34,7 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml logs --tail=100
 docker compose --env-file deploy/.env -f deploy/compose.yaml down
 ```
 
-`down` 保留命名卷。RabbitMQ 固定 hostname，以便重建容器后使用同一节点数据目录。数据库初始化变量只在首次创建数据目录时生效，后续修改密码应通过各服务的管理操作处理。单节点 RabbitMQ 用于开发，不能证明生产高可用能力；业务队列、Outbox 与重试消费者将在消息功能阶段实现。
+`down` 保留命名卷。RabbitMQ 固定 hostname，以便重建容器后使用同一节点数据目录。数据库初始化变量只在首次创建数据目录时生效，后续修改密码应通过各服务的管理操作处理。单节点 RabbitMQ 用于开发，不能证明生产高可用能力；业务队列、Outbox 与重试消费者已接入。
 
 镜像沿各维护版本线更新，正式部署时再锁定经验证的镜像摘要。配置依据：[MySQL 官方镜像](https://hub.docker.com/_/mysql)、[RabbitMQ 官方镜像](https://hub.docker.com/_/rabbitmq)、[Compose 环境变量](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/)。
 
@@ -43,3 +43,15 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml down
 中间件健康后，在根目录运行 `./scripts/verify-database.sh`。脚本读取未纳入版本控制的 `deploy/.env`，使用 root 仅创建与清理独立的随机测试库；业务服务仍使用普通 `koko` 账号。可在脚本后传 Maven 参数，例如 `-s /path/to/settings.xml`。
 
 如果本机已有 MySQL 占用 3306，在 `.env` 中设置 `MYSQL_PORT=3307`；不要停止其他项目的数据库。此端口会同时用于 Compose 映射和后端 JDBC 连接。
+
+## RustFS 中的图片存在哪里
+
+默认私有桶为 `koko-chat`，对象键为 `attachments/<上传 UUID>`。实际字节保存在 RustFS 容器 `/data`，由 Compose 命名卷 `rustfs-data` 持久化；默认项目名下的 Docker 卷名为 `koko-chat_rustfs-data`。macOS Docker Desktop 的命名卷在其 Linux 虚拟机内，不是项目目录下的普通图片文件夹。MySQL `attachment` 表保存文件名、大小、摘要、对象键和归属，`message` 保存附件引用。
+
+- S3 API：`http://127.0.0.1:9000`；管理控制台：`http://127.0.0.1:9001`。
+- `.env` 中配置 `RUSTFS_ACCESS_KEY`、`RUSTFS_SECRET_KEY`，后端和 RustFS 使用同一组开发凭证；不传给客户端、不提交仓库。已有 `.env` 需要补齐新增字段，建议权限为 600。
+- `RUSTFS_ENDPOINT` 默认 `http://127.0.0.1:9000`，`RUSTFS_BUCKET` 默认 `koko-chat`。若修改映射端口，同时更新 endpoint；后端进入容器后应改用服务网络地址。
+- 后端首次写入时检查并创建私有桶；健康探针暂未包括 RustFS，需要看容器 `/health` 和实际上传验收。
+- `docker compose down` 保留对象；`down -v` 会删除命名卷及数据，不用于日常停止服务。
+
+本轮固定使用官方候选版本 `rustfs/rustfs:1.0.0-rc.5`，不是稳定版承诺；此单节点部署用于开发联调。Java 接入使用 AWS SDK v2 2.54.13、S3 v4 签名和 path-style，保留默认 TLS 校验。依据：[官方 Docker 部署](https://docs.rustfs.com/en/installation/container/docker)、[Java SDK 指南](https://docs.rustfs.com/en/developer/sdk/java)、[RC.5 发布记录](https://github.com/rustfs/rustfs/releases/tag/1.0.0-rc.5)。
