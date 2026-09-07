@@ -2,6 +2,7 @@ package dev.koko.chat.desktop.platform
 
 import java.nio.file.Path
 
+/** 封装各平台应用数据目录；测试可用环境变量隔离存储，避免污染真实用户设置。 */
 object AppPaths {
     fun preferencesFile(): Path {
         val override = System.getenv("KOKO_CHAT_DATA_DIR")

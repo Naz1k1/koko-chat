@@ -19,7 +19,7 @@ import java.time.Instant;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-/** Lightweight transport probes only. Blocking business work must use imBusinessExecutor. */
+/** 仅处理轻量传输探针；后续阻塞业务必须交给 imBusinessExecutor。每个连接独享一个 Handler。 */
 final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketFrame> {
     private final ObjectMapper mapper;
     private final NettyProperties properties;
@@ -31,6 +31,7 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
         this.properties = properties;
     }
 
+    /** 校验 JSON 信封后分派命令；当前只响应心跳，不伪造认证成功或消息保存确认。 */
     @Override
     protected void channelRead0(ChannelHandlerContext context, WebSocketFrame frame) {
         if (frame instanceof BinaryWebSocketFrame) {
@@ -74,6 +75,7 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
         }
     }
 
+    /** 回显请求标识，并使用服务端 UTC 时间；requestId 不承担消息幂等职责。 */
     private ObjectNode response(String type, String requestId) {
         ObjectNode result = mapper.createObjectNode().put("v", 1).put("type", type);
         if (requestId != null) {
@@ -87,6 +89,7 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
     }
 
     private void reply(ChannelHandlerContext context, ObjectNode response) {
+        // 写缓冲达到水位时关闭慢连接，避免无限积压待发送响应。
         if (!context.channel().isWritable()) {
             close(context, 1013, "Slow connection; reconnect and retry");
             return;
@@ -98,7 +101,7 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
     public void userEventTriggered(ChannelHandlerContext context, Object event) throws Exception {
         if (event instanceof WebSocketServerProtocolHandler.HandshakeComplete) {
             upgraded = true;
-            // No authenticated sessions exist yet. PING does not extend this deadline.
+            // 骨架尚无认证会话；心跳不会延长认证期限，防止匿名连接一直占用资源。
             authenticationDeadline = context.executor().schedule(
                     () -> close(context, 1008, "Authentication required"),
                     properties.authenticationTimeout().toMillis(), TimeUnit.MILLISECONDS);
@@ -110,6 +113,7 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
 
     @Override
     public void channelInactive(ChannelHandlerContext context) throws Exception {
+        // 连接关闭后取消定时任务，避免继续引用已经失效的 Channel。
         if (authenticationDeadline != null) {
             authenticationDeadline.cancel(false);
         }
@@ -126,6 +130,7 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
     }
 
     private void close(ChannelHandlerContext context, int code, String reason) {
+        // 握手前仍是 HTTP 连接，不能向其写 WebSocket 关闭帧。
         if (!upgraded) {
             context.close();
             return;

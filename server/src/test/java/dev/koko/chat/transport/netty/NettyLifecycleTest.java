@@ -20,6 +20,7 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+/** 验证启动失败、主动关闭和匿名超时都能释放监听端口及事件循环。 */
 class NettyLifecycleTest {
     @Test
     void occupiedPortFailsSpringStartupWithoutLeakingEventLoops() throws Exception {

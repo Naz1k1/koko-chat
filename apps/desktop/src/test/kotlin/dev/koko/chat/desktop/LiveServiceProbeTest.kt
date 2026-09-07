@@ -9,7 +9,7 @@ import org.junit.Assume.assumeTrue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
-/** Opt-in integration check against an already running backend. */
+/** 显式提供环境变量后才连接真实后端；默认跳过，避免普通测试依赖本机服务。 */
 class LiveServiceProbeTest {
     @Test fun `CIO reads system and health from a running backend`() {
         val apiBase = System.getenv("KOKO_CHAT_TEST_API_BASE")?.trim()

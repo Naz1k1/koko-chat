@@ -2,10 +2,12 @@ package dev.koko.chat.desktop.config
 
 import java.net.URI
 
+/** 非敏感服务地址；默认明文地址仅用于本机开发，远程部署使用 HTTPS/WSS。 */
 data class ServiceSettings(
     val apiBaseUrl: String = "http://127.0.0.1:8080",
     val imUrl: String = "ws://127.0.0.1:8081/im",
 ) {
+    /** 规范化地址并拒绝内嵌凭证、查询参数及不支持的协议，返回可安全保存的副本。 */
     fun validated(): ServiceSettings {
         validateUrl(apiBaseUrl, setOf("http", "https"), "HTTP 服务地址")
         validateUrl(imUrl, setOf("ws", "wss"), "IM 服务地址")

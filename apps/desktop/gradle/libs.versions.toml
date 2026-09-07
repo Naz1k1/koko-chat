@@ -1,4 +1,4 @@
-# Stable releases checked against upstream release notes and Maven Central on 2026-09-07.
+# 稳定版本已于 2026-09-07 对照官方发布说明和 Maven Central 核验。
 [versions]
 kotlin = "2.4.10"
 compose = "1.12.0"

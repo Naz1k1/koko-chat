@@ -24,6 +24,7 @@ private val Muted = Color(0xFF77817D)
 private val Canvas = Color(0xFFF6F8F6)
 private val Line = Color(0xFFE5EAE5)
 
+/** 订阅页面状态并展示真实空态；设置保存与服务检查均由 ScreenModel 执行。 */
 @Composable
 fun DesktopApp(model: DesktopScreenModel, closing: Boolean) {
     val state by model.state.collectAsState()
@@ -90,6 +91,7 @@ fun DesktopApp(model: DesktopScreenModel, closing: Boolean) {
     }
 }
 
+/** 按探针状态渲染连接提示，正在检查或退出时禁用按钮。 */
 @Composable
 private fun ServiceStatus(state: DesktopUiState, closing: Boolean, onCheck: () -> Unit) {
     val dot = when (state.probeStatus) {
@@ -111,6 +113,7 @@ private fun ServiceStatus(state: DesktopUiState, closing: Boolean, onCheck: () -
     }
 }
 
+/** 输入框只保留编辑草稿，用户确认后再交给模型校验及持久化。 */
 @Composable
 private fun SettingsDialog(state: DesktopUiState, model: DesktopScreenModel) {
     var api by remember { mutableStateOf(state.settings.apiBaseUrl) }

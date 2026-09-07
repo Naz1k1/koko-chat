@@ -26,6 +26,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/** 使用真实随机端口验证 HTTP/WS 协议边界，默认不依赖任何中间件。 */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "koko.netty.port=0")
 @ActiveProfiles("skeleton")

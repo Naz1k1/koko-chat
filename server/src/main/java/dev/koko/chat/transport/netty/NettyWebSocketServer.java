@@ -29,6 +29,7 @@ import org.springframework.stereotype.Component;
 import java.net.InetSocketAddress;
 import java.util.concurrent.TimeUnit;
 
+/** 用 Spring 生命周期管理 Netty：启动时绑定端口，关闭时释放连接及事件循环。 */
 @Component
 public class NettyWebSocketServer implements SmartLifecycle {
     private static final Logger log = LoggerFactory.getLogger(NettyWebSocketServer.class);
@@ -41,12 +42,14 @@ public class NettyWebSocketServer implements SmartLifecycle {
 
     public NettyWebSocketServer(NettyProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
+        // 独立协议解析器不影响 HTTP JSON 配置，并拒绝尾随 JSON 和过深嵌套。
         this.protocolMapper = objectMapper.copy();
         protocolMapper.enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
         protocolMapper.getFactory().setStreamReadConstraints(StreamReadConstraints.builder()
                 .maxNestingDepth(16).maxStringLength(properties.maxMessageBytes()).build());
     }
 
+    /** 同步启动确保端口绑定失败会阻止应用成功启动，不留下半就绪的接入层。 */
     @Override
     public synchronized void start() {
         if (isRunning()) {
@@ -54,6 +57,7 @@ public class NettyWebSocketServer implements SmartLifecycle {
         }
         boss = new NioEventLoopGroup(1, new DefaultThreadFactory("koko-im-boss"));
         workers = new NioEventLoopGroup(2, new DefaultThreadFactory("koko-im-worker"));
+        // stayClosed=true：关闭期间迟到的新连接也立即关闭，避免遗漏连接。
         connections = new DefaultChannelGroup("koko-im-connections", workers.next(), true);
         ChannelGroup acceptedConnections = connections;
         try {
@@ -67,6 +71,7 @@ public class NettyWebSocketServer implements SmartLifecycle {
                         @Override
                         protected void initChannel(SocketChannel channel) {
                             acceptedConnections.add(channel);
+                            // 顺序依次为超时、HTTP 解码/聚合、升级检查、WS 握手、分片聚合和业务探针。
                             channel.pipeline()
                                     .addLast(new IdleStateHandler(properties.idleTimeout().toMillis(), 0, 0, TimeUnit.MILLISECONDS))
                                     .addLast(new HttpServerCodec(4096, 8192, 8192))
@@ -83,15 +88,17 @@ public class NettyWebSocketServer implements SmartLifecycle {
                                     .addLast(new WebSocketProbeHandler(protocolMapper, properties));
                         }
                     });
-            // Startup runs on Spring's lifecycle thread, never on an EventLoop.
+            // 此等待发生在 Spring 生命周期线程，不在 Netty EventLoop 上阻塞。
             listener = bootstrap.bind(properties.host(), properties.port()).syncUninterruptibly().channel();
             log.info("Netty WebSocket listening on {}:{}{}", properties.host(), port(), properties.path());
         } catch (Exception exception) {
+            // Netty 可能直接抛出受检的 BindException，因此不能只捕获 RuntimeException。
             stop();
             throw new IllegalStateException("Cannot bind Netty WebSocket to " + properties.host() + ":" + properties.port(), exception);
         }
     }
 
+    /** 先停止接入，再关闭现有连接，最后退出线程组；重复调用仍安全。 */
     @Override
     public synchronized void stop() {
         Channel current = listener;
@@ -130,6 +137,7 @@ public class NettyWebSocketServer implements SmartLifecycle {
         return current != null && current.isActive();
     }
 
+    /** 返回实际绑定端口，便于随机端口测试和系统信息探针共用同一事实。 */
     public int port() {
         Channel current = listener;
         return current == null ? properties.port() : ((InetSocketAddress) current.localAddress()).getPort();
@@ -137,6 +145,7 @@ public class NettyWebSocketServer implements SmartLifecycle {
 
     @Override
     public int getPhase() {
+        // 高阶段值让 Netty 在关闭阶段较早停止接入，避免业务资源销毁后仍收新请求。
         return Integer.MAX_VALUE - 100;
     }
 }

@@ -16,8 +16,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
+/** HTTP 探针状态与登录状态独立，REACHABLE 不表示可以发送聊天消息。 */
 enum class ProbeStatus { NOT_CHECKED, CHECKING, REACHABLE, UNHEALTHY, FAILED }
 
+/** 页面可观察的当前状态快照；StateFlow 不承担逐条网络消息事件的传递。 */
 data class DesktopUiState(
     val settings: ServiceSettings = ServiceSettings(),
     val initialized: Boolean = false,
@@ -31,7 +33,7 @@ data class DesktopUiState(
     val settingsError: String? = null,
 )
 
-/** Ordinary Kotlin MVVM model. It owns page work, never an authenticated WebSocket. */
+/** 普通 Kotlin MVVM 模型，管理页面任务与状态，不持有全局认证连接。 */
 class DesktopScreenModel(
     parentScope: CoroutineScope,
     private val store: PreferencesStore,
@@ -60,6 +62,7 @@ class DesktopScreenModel(
         if (!state.value.settingsSaving) mutableState.update { it.copy(settingsOpen = false, settingsError = null) }
     }
 
+    /** 校验并持久化新地址；保存完成前不允许发起使用旧地址的新检查。 */
     fun saveSettings(apiBaseUrl: String, imUrl: String) {
         if (!state.value.initialized || state.value.settingsSaving) return
         val settings = try {
@@ -71,7 +74,7 @@ class DesktopScreenModel(
         mutableState.update { it.copy(settingsSaving = true, settingsError = null) }
         scope.launch {
             try {
-                // Wait for the previous endpoint's probe before accepting a new endpoint.
+                // 先取消并等待旧地址的探针结束，防止迟到结果覆盖新地址的页面状态。
                 probeJob?.cancelAndJoin()
                 store.save(settings)
                 mutableState.update {
@@ -86,6 +89,7 @@ class DesktopScreenModel(
         }
     }
 
+    /** 合并重复点击，同一时刻只执行一个探针任务；取消异常必须继续向上传递。 */
     fun checkService() {
         if (!state.value.initialized || state.value.settingsSaving || probeJob?.isActive == true) return
         val settings = state.value.settings
@@ -111,5 +115,6 @@ class DesktopScreenModel(
         }
     }
 
+    /** 关闭页面任务并等待结束，保证随后关闭数据库和 HttpClient 时不再被使用。 */
     suspend fun close() = job.cancelAndJoin()
 }

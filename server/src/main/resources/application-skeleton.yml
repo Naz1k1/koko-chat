@@ -1,4 +1,4 @@
-# No middleware clients, connections, migrations or declarations in the default profile.
+# 默认骨架模式排除中间件自动配置，不创建连接、业务表或消息队列。
 spring:
   autoconfigure:
     exclude:

@@ -12,6 +12,7 @@ import dev.koko.chat.desktop.ui.DesktopApp
 import kotlinx.coroutines.launch
 import java.awt.Dimension
 
+/** 桌面程序入口；窗口只渲染状态，网络和数据库由窗口外的 AppRuntime 持有。 */
 fun main() {
     val runtime = AppRuntime()
     application {
@@ -20,6 +21,7 @@ fun main() {
             title = "koko-chat",
             state = rememberWindowState(width = 1120.dp, height = 760.dp),
             onCloseRequest = {
+                // 避免连续点击关闭触发多次清理；当前关闭窗口即退出，不隐藏到托盘。
                 if (!closing) {
                     closing = true
                     runtime.scope.launch {

@@ -14,7 +14,7 @@ import io.netty.handler.codec.http.HttpVersion;
 
 import java.nio.charset.StandardCharsets;
 
-/** Answer non-WebSocket traffic explicitly instead of leaving HTTP clients waiting for idle timeout. */
+/** 在握手前校验路径、方法与升级头，明确返回 HTTP 错误，避免无效请求一直等待。 */
 final class WebSocketUpgradeGuard extends SimpleChannelInboundHandler<FullHttpRequest> {
     private final String path;
 
@@ -35,6 +35,7 @@ final class WebSocketUpgradeGuard extends SimpleChannelInboundHandler<FullHttpRe
             status = HttpResponseStatus.UPGRADE_REQUIRED;
         }
         if (status == null) {
+            // 当前 Handler 会自动释放请求；向后传递前增加引用计数，交给握手 Handler 接管。
             context.fireChannelRead(request.retain());
             return;
         }

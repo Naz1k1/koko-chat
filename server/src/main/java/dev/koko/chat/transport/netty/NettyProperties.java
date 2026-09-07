@@ -10,6 +10,7 @@ import org.springframework.validation.annotation.Validated;
 
 import java.time.Duration;
 
+/** Netty 接入配置；端口 0 用于测试随机监听，帧和聚合消息分别限制大小。 */
 @Validated
 @ConfigurationProperties("koko.netty")
 public record NettyProperties(
@@ -20,6 +21,7 @@ public record NettyProperties(
         @DefaultValue("16384") @Min(256) @Max(1048576) int maxMessageBytes,
         @DefaultValue("75s") Duration idleTimeout,
         @DefaultValue("30s") Duration authenticationTimeout) {
+    // 在绑定配置时拒绝无效超时，避免连接无期限占用资源。
     public NettyProperties {
         if (idleTimeout == null || idleTimeout.isNegative() || idleTimeout.isZero()
                 || authenticationTimeout == null || authenticationTimeout.isNegative()

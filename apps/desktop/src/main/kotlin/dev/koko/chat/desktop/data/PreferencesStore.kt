@@ -9,11 +9,12 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Properties
 
-/** Only non-sensitive preferences exist at this stage; account message stores come later. */
+/** 只保存非敏感设置；调用方提供串行 IO 执行器，账号消息库在后续业务阶段单独实现。 */
 class PreferencesStore(private val file: Path, private val dispatcher: CoroutineDispatcher) {
     private var driver: JdbcSqliteDriver? = null
     private var database: DesktopDatabase? = null
 
+    /** 延迟打开数据库，由 SQLDelight 生成的 Schema 管理建表，禁止在 UI 线程直接调用。 */
     private fun database(): DesktopDatabase {
         database?.let { return it }
         Files.createDirectories(file.parent)
@@ -22,6 +23,7 @@ class PreferencesStore(private val file: Path, private val dispatcher: Coroutine
         return DesktopDatabase(opened).also { database = it }
     }
 
+    /** 没有保存值时使用本机默认地址，读取结果仍需通过统一地址校验。 */
     suspend fun load(): ServiceSettings = withContext(dispatcher) {
         val queries = database().preferencesQueries
         val defaults = ServiceSettings()
@@ -34,12 +36,14 @@ class PreferencesStore(private val file: Path, private val dispatcher: Coroutine
     suspend fun save(settings: ServiceSettings) = withContext(dispatcher) {
         val validated = settings.validated()
         val db = database()
+        // 两个地址在同一同步事务中写入，事务体内不挂起、不切线程、不发网络请求。
         db.transaction {
             db.preferencesQueries.putValue("api_base_url", validated.apiBaseUrl)
             db.preferencesQueries.putValue("im_url", validated.imUrl)
         }
     }
 
+    /** 由应用退出流程调用；应先停止所有使用此存储的任务。 */
     suspend fun close() = withContext(dispatcher) {
         driver?.close()
         driver = null

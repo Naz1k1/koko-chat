@@ -1,3 +1,4 @@
+# 默认无需中间件即可启动；启用 local 后再加载数据库、Redis 和 RabbitMQ 配置。
 spring:
   application:
     name: koko-chat
@@ -11,6 +12,7 @@ server:
   port: ${HTTP_PORT:8080}
   shutdown: graceful
 
+# 只公开基础健康状态，不向匿名调用者暴露连接地址或中间件细节。
 management:
   endpoints:
     web:
@@ -21,6 +23,7 @@ management:
       show-details: never
 
 koko:
+  # 构建时由 Maven 替换为项目版本，避免探针与打包版本各自维护。
   version: '@project.version@'
   netty:
     host: ${IM_HOST:127.0.0.1}

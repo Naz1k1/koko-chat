@@ -18,6 +18,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
+/** 用受控协程验证重复检查只启动一次，并确认关闭模型会取消进行中的探针。 */
 class DesktopScreenModelTest {
     @get:Rule val temporaryFolder = TemporaryFolder()
 

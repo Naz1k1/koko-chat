@@ -18,6 +18,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
+/** 验证地址校验、SQLite 重开持久化及 HTTP 契约，不依赖外部后端。 */
 class DesktopFoundationTest {
     @get:Rule val temporaryFolder = TemporaryFolder()
 

@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
+/** 汇总应用版本与 HTTP、Netty 运行信息，隔离 Controller 与底层连接实现。 */
 @Service
 public class SystemInfoService {
     private final Environment environment;
@@ -22,6 +23,7 @@ public class SystemInfoService {
     }
 
     public SystemInfo info() {
+        // 测试可使用随机端口，优先读取启动完成后发布的实际端口。
         int httpPort = environment.getProperty("local.server.port", Integer.class,
                 environment.getProperty("server.port", Integer.class, 8080));
         return new SystemInfo("koko-chat", version, "skeleton", httpPort, nettyServer.port(), properties.path());
