@@ -1,0 +1,10 @@
+CREATE TABLE app_preferences (
+    key TEXT NOT NULL PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+selectValue:
+SELECT value FROM app_preferences WHERE key = ?;
+
+putValue:
+INSERT OR REPLACE INTO app_preferences(key, value) VALUES (?, ?);

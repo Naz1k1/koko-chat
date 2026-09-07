@@ -2,7 +2,7 @@
 
 桌面即时通信项目。客户端采用 **Kotlin + Compose Desktop**；服务端采用 **Java 21 + Spring Boot 3.5.x + Netty + RabbitMQ + MySQL + Redis**，按 Controller / Handler → Service → Mapper 常规分层组织。
 
-当前阶段为工程骨架。后端提供系统信息、健康检查和 Netty WebSocket 心跳入口；登录、消息持久化、群聊、MQ 分发和离线同步按架构文档逐步实现。桌面端采用 MVVM + StateFlow、Ktor HTTPS/WSS、SQLDelight + SQLite，两端统一使用 JDK 21。
+当前阶段为工程骨架。后端提供系统信息、健康检查和 Netty WebSocket 心跳入口；桌面端提供中文基础窗口、服务检查与 SQLite 设置保存。登录、消息持久化、群聊、MQ 分发和离线同步按架构文档逐步实现。桌面端采用 MVVM + StateFlow、Ktor HTTPS/WSS、SQLDelight + SQLite，两端统一使用 JDK 21。
 
 ## 后端启动
 
@@ -23,6 +23,29 @@ cd server
 这里的明文地址用于本机开发；部署时配置 HTTPS/WSS 入口。心跳成功只证明传输可用，不能视为登录成功或消息已送达。
 
 后端配置、协议探针和测试见 [后端说明](server/README.md)。需要连接 MySQL、Redis、RabbitMQ 时，按 [本机中间件说明](deploy/README.md) 启动服务并启用 `local` 配置。
+
+## 桌面端启动
+
+在仓库根目录另开终端，使用有效的 JDK 21 与工程自带的 Gradle Wrapper：
+
+```bash
+cd apps/desktop
+./gradlew test
+./gradlew run
+```
+
+桌面端默认检查 `http://127.0.0.1:8080`，可在服务设置中修改地址并保存到本机 SQLite。界面会区分 HTTP 可达与 IM 登录状态；当前尚未实现登录和聊天连接。
+
+生成携带 Java 运行时的桌面应用：
+
+```bash
+./gradlew createDistributable
+./gradlew runDistributable
+# 在 macOS 上生成 DMG
+./gradlew packageDmg
+```
+
+版本、数据目录和平台要求见 [桌面端说明](apps/desktop/README.md)。首次构建需要联网下载依赖；Windows 使用对应的 `mvnw.cmd` / `gradlew.bat`。
 
 ## 设计文档
 

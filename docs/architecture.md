@@ -31,7 +31,7 @@ RabbitMQ 队列拓扑、可靠性边界、重试与故障演练见 [消息队列
 
 客户端使用 Compose 绘制界面，采用 Kotlin/JVM 桌面目标；首期不建立 Android/iOS 工程。后续如确有移动端需求，再提取可共享代码。客户端和服务端独立构建，JDK toolchain 与 JVM target 均统一为 21。
 
-Compose Compiler 插件与 Kotlin 插件版本保持一致；实施时通过版本目录锁定 Kotlin、Compose、Ktor、SQLDelight 与 Gradle 的兼容组合。JDK 21 满足 Compose 桌面运行和安装包构建所需的 JDK 门槛，目标操作系统与 CPU 架构仍需按锁定的 Compose 版本验证。[Compose 兼容说明](https://kotlinlang.org/docs/multiplatform/compose-compatibility-and-versioning.html)
+Compose Compiler 插件与 Kotlin 插件版本保持一致；骨架已通过版本目录和 Wrapper 锁定 Kotlin、Compose、Ktor、SQLDelight 与 Gradle 的兼容组合，具体版本见 [桌面工程说明](../apps/desktop/README.md)。JDK 21 满足 Compose 桌面运行和安装包构建所需的 JDK 门槛，目标操作系统与 CPU 架构仍需按锁定的 Compose 版本验证。[Compose 兼容说明](https://kotlinlang.org/docs/multiplatform/compose-compatibility-and-versioning.html)
 
 客户端模块、连接状态机、缓存和桌面打包见 [Kotlin 桌面端设计](desktop.md)。
 

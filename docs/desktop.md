@@ -1,6 +1,6 @@
 # Kotlin 桌面客户端设计
 
-状态：架构基线 v1。客户端确定为 Kotlin + Compose Desktop；本文描述待实现方案，与 [整体架构](architecture.md) 和 [RabbitMQ 设计](messaging.md) 配套。
+状态：架构基线 v1，基础工程已落盘。客户端确定为 Kotlin + Compose Desktop；当前已实现窗口、HTTP 服务检查与 SQLite 设置存储，运行及验证范围见 [桌面工程说明](../apps/desktop/README.md)。本文其余认证、聊天和同步流程为后续实现契约，与 [整体架构](architecture.md) 和 [RabbitMQ 设计](messaging.md) 配套。
 
 ## 1. 技术与构建边界
 
@@ -52,7 +52,7 @@ apps/desktop/
     └── resources/
 ```
 
-以上目录是实现约定，当前没有创建客户端工程或构建脚本。
+以上目录是完整客户端的目标结构。目前已有构建脚本、窗口、ScreenModel、Ktor 探针、SessionManager 生命周期占位与 SQLite 设置存储；账号消息库、发送队列和同步协调器随业务阶段补充。
 
 调用关系为：**Compose 页面 → ScreenModel → MessageStore / SessionManager → Ktor 或 SQLite**。返回的数据库结果和会话状态形成 UiState，再由 Compose 渲染。
 
@@ -187,7 +187,7 @@ JDBC 驱动事务使用线程相关状态；一个事务体内只执行同步数
 
 ## 10. 打包与平台验证
 
-客户端构建显式固定 Java toolchain=21、JVM target=21 和打包使用的 javaHome。Kotlin、Compose Compiler、Compose UI 与 Gradle 版本在兼容性验证后锁定，Compose Compiler 插件版本与 Kotlin 插件保持一致。
+客户端构建显式固定 Java toolchain=21、JVM target=21 和打包使用的 javaHome。Kotlin、Compose Compiler、Compose UI 与 Gradle 版本已在工程版本目录和 Wrapper 中锁定，Compose Compiler 插件版本与 Kotlin 插件保持一致；具体版本及官方依据见桌面工程 README。
 
 Compose 的 jpackage/jlink 流程生成包含 Java 运行时的安装包，用户无需自行安装 JDK。官方流程按目标操作系统构建：macOS 生成 dmg/pkg、Windows 生成 msi/exe、Linux 生成 deb/rpm，不假定在一台 macOS 上生成所有系统安装包。[Compose 原生分发](https://kotlinlang.org/docs/multiplatform/compose-native-distribution.html)
 
@@ -217,4 +217,4 @@ Compose 的 jpackage/jlink 流程生成包含 Java 运行时的安装包，用�
 | 托盘隐藏、唤醒、主动退出 | 按定义保留或终止连接，无孤立重连任务 |
 | 各平台安装包启动 | JDBC、TLS、字体、图片和通知正常 |
 
-上述为实现契约和测试计划；本次没有生成客户端业务代码或声称完成端到端测试。
+上表为完整聊天客户端的目标验收。当前骨架验证覆盖基础构建、设置存储、服务探针及 macOS 打包，尚未完成认证、消息收发和同步的端到端验收。

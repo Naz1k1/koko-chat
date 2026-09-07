@@ -1,0 +1,115 @@
+package dev.koko.chat.desktop.presentation
+
+import dev.koko.chat.desktop.config.ServiceSettings
+import dev.koko.chat.desktop.data.PreferencesStore
+import dev.koko.chat.desktop.network.ProbeResult
+import dev.koko.chat.desktop.network.ServiceProbe
+import io.ktor.client.plugins.ResponseException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+
+enum class ProbeStatus { NOT_CHECKED, CHECKING, REACHABLE, UNHEALTHY, FAILED }
+
+data class DesktopUiState(
+    val settings: ServiceSettings = ServiceSettings(),
+    val initialized: Boolean = false,
+    val storageReady: Boolean = false,
+    val storageMessage: String = "正在打开本地设置…",
+    val probeStatus: ProbeStatus = ProbeStatus.NOT_CHECKED,
+    val probeMessage: String = "尚未检查 HTTP 服务",
+    val service: ProbeResult? = null,
+    val settingsOpen: Boolean = false,
+    val settingsSaving: Boolean = false,
+    val settingsError: String? = null,
+)
+
+/** Ordinary Kotlin MVVM model. It owns page work, never an authenticated WebSocket. */
+class DesktopScreenModel(
+    parentScope: CoroutineScope,
+    private val store: PreferencesStore,
+    private val probe: ServiceProbe,
+) {
+    private val job = SupervisorJob(parentScope.coroutineContext[Job])
+    private val scope = CoroutineScope(parentScope.coroutineContext + job)
+    private val mutableState = MutableStateFlow(DesktopUiState())
+    val state: StateFlow<DesktopUiState> = mutableState.asStateFlow()
+    private var probeJob: Job? = null
+
+    init {
+        scope.launch {
+            try {
+                val settings = store.load()
+                mutableState.update { it.copy(settings = settings, initialized = true, storageReady = true, storageMessage = "本地设置已就绪") }
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                mutableState.update { it.copy(initialized = true, storageMessage = "本地设置无法打开，请检查数据目录权限") }
+            }
+        }
+    }
+
+    fun openSettings() { mutableState.update { it.copy(settingsOpen = true, settingsError = null) } }
+    fun closeSettings() {
+        if (!state.value.settingsSaving) mutableState.update { it.copy(settingsOpen = false, settingsError = null) }
+    }
+
+    fun saveSettings(apiBaseUrl: String, imUrl: String) {
+        if (!state.value.initialized || state.value.settingsSaving) return
+        val settings = try {
+            ServiceSettings(apiBaseUrl, imUrl).validated()
+        } catch (error: IllegalArgumentException) {
+            mutableState.update { it.copy(settingsError = error.message) }
+            return
+        }
+        mutableState.update { it.copy(settingsSaving = true, settingsError = null) }
+        scope.launch {
+            try {
+                // Wait for the previous endpoint's probe before accepting a new endpoint.
+                probeJob?.cancelAndJoin()
+                store.save(settings)
+                mutableState.update {
+                    it.copy(settings = settings, settingsOpen = false, settingsSaving = false,
+                        storageReady = true, storageMessage = "本地设置已就绪",
+                        probeStatus = ProbeStatus.NOT_CHECKED, probeMessage = "地址已更新，请重新检查服务", service = null)
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                mutableState.update { it.copy(settingsSaving = false, settingsError = "设置未能保存，请检查数据目录权限", probeStatus = ProbeStatus.NOT_CHECKED, probeMessage = "请重新检查服务") }
+            }
+        }
+    }
+
+    fun checkService() {
+        if (!state.value.initialized || state.value.settingsSaving || probeJob?.isActive == true) return
+        val settings = state.value.settings
+        mutableState.update { it.copy(probeStatus = ProbeStatus.CHECKING, probeMessage = "正在读取服务信息与健康状态…", service = null) }
+        probeJob = scope.launch {
+            try {
+                val result = probe.check(settings)
+                val healthy = result.health.status == "UP"
+                mutableState.update {
+                    it.copy(probeStatus = if (healthy) ProbeStatus.REACHABLE else ProbeStatus.UNHEALTHY,
+                        probeMessage = if (healthy) "HTTP 服务可达 · 健康检查通过" else "HTTP 服务可达 · 健康状态 ${result.health.status}",
+                        service = result)
+                }
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                val detail = when (error) {
+                    is ResponseException -> "服务返回 HTTP ${error.response.status.value}"
+                    is IllegalArgumentException -> error.message ?: "服务响应不符合契约"
+                    else -> "无法完成检查，请确认服务已启动且地址正确"
+                }
+                mutableState.update { it.copy(probeStatus = ProbeStatus.FAILED, probeMessage = detail, service = null) }
+            }
+        }
+    }
+
+    suspend fun close() = job.cancelAndJoin()
+}
