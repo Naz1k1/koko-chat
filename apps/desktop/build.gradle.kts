@@ -20,6 +20,10 @@ kotlin {
 
 dependencies {
     implementation(compose.desktop.currentOs)
+    implementation("dev.onvoid.webrtc:webrtc-java:0.16.0")
+    val rtcOs=when { System.getProperty("os.name").startsWith("Mac") -> "macos";System.getProperty("os.name").startsWith("Windows") -> "windows";else -> "linux" }
+    val rtcArch=if(System.getProperty("os.arch") in setOf("aarch64","arm64")) "aarch64" else "x86_64"
+    runtimeOnly("dev.onvoid.webrtc:webrtc-java:0.16.0:$rtcOs-$rtcArch")
     implementation(libs.compose.material3)
     implementation(libs.coroutines.core)
     implementation(libs.coroutines.swing)
@@ -68,6 +72,7 @@ compose.desktop {
             // 裁剪运行时时显式保留 JDBC 与网络/加密模块，供 SQLite 和 HTTPS 使用。
             modules("java.sql", "java.net.http", "jdk.crypto.ec", "jdk.unsupported")
             macOS {
+                infoPlist { extraKeysRawXml = "<key>NSMicrophoneUsageDescription</key><string>用于在你发起或接听语音通话时采集声音</string><key>NSCameraUsageDescription</key><string>用于你主动开启的视频功能</string>" }
                 bundleID = "dev.koko.chat.desktop"
                 // 本机 JDK 21.0.2 的 jpackage 要求 macOS 安装包版本首位大于零。
                 packageVersion = "1.0.0"

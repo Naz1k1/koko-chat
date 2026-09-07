@@ -50,6 +50,7 @@ class DesktopScreenModel(
     private val chat: ChatModel? = null,
     private val contacts: ContactModel? = null,
     private val groups: GroupModel? = null,
+    private val calls: dev.koko.chat.desktop.call.CallModel? = null,
 ) {
     private val job = SupervisorJob(parentScope.coroutineContext[Job])
     private val scope = CoroutineScope(parentScope.coroutineContext + job)
@@ -57,6 +58,11 @@ class DesktopScreenModel(
     val state: StateFlow<DesktopUiState> = mutableState.asStateFlow()
     private var probeJob: Job? = null
     val sessionState: StateFlow<SessionUiState> = sessions?.state ?: MutableStateFlow(SessionUiState())
+    val callState = calls?.state ?: MutableStateFlow(dev.koko.chat.desktop.call.CallUiState())
+    fun dialVoice() { chat?.state?.value?.let { state -> state.conversations.find { it.id==state.selectedId }?.let { calls?.dial(it) } } }
+    fun acceptVoice() { calls?.accept() }
+    fun hangupVoice() { calls?.hangup() }
+    fun muteVoice() { calls?.mute() }
     fun signIn(account: String, password: String, nickname: String?, register: Boolean) {
         if (!state.value.initialized || state.value.settingsSaving) return
         sessions?.signIn(state.value.settings, account, password, nickname, register)
@@ -86,6 +92,7 @@ class DesktopScreenModel(
     fun sendMessage(text:String,onSaved:()->Unit) { chat?.send(text,onSaved) }
     fun sendFile(path:java.nio.file.Path,kind:String) { chat?.sendFile(path,kind) }
     fun openAttachment(message:dev.koko.chat.desktop.network.ChatMessage,path:java.nio.file.Path?=null) { chat?.attachment(message,path) }
+    fun loadThumbnail(message:dev.koko.chat.desktop.network.ChatMessage) { chat?.loadThumbnail(message) }
     fun closeAttachmentPreview() { chat?.closePreview() }
     fun retryMessage(id:String) { chat?.retry(id) }
 

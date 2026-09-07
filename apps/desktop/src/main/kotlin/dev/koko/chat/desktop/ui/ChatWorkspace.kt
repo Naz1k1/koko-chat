@@ -32,6 +32,7 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
     var showContacts by remember(session.user?.id) { mutableStateOf(false) }
     var peer by remember { mutableStateOf("") }
     var draft by remember(state.selectedId) { mutableStateOf("") }
+    val call by model.callState.collectAsState()
     val selected=state.conversations.find { it.id==state.selectedId }
     val list=messageListState
     val total=state.messages.size+state.pending.size
@@ -45,7 +46,7 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
     }
     val currentMessages by rememberUpdatedState(state.messages)
     val reportRead by rememberUpdatedState(onReadVisible)
-    val reading=windowFocused && !closing && !settingsOpen && !showContacts && groups.dialog==null && state.preview==null
+    val reading=windowFocused && !closing && !settingsOpen && !showContacts && groups.dialog==null && state.preview==null && call.call==null
     LaunchedEffect(reading,selected?.id,selected?.membershipEpoch,state.messages) {
         if(reading && selected!=null) snapshotFlow {
             if(list.isScrollInProgress) null else list.layoutInfo.visibleItemsInfo
@@ -98,9 +99,10 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
         } else Column(Modifier.weight(1f).fillMaxHeight().padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
             Row(verticalAlignment=Alignment.CenterVertically) {
                 Text(selected?.nickname ?: "开始一段对话",fontSize=23.sp,fontWeight=FontWeight.SemiBold,color=Color(0xFF213D38),modifier=Modifier.weight(1f))
+                if(selected?.type=="DIRECT") TextButton(model::dialVoice,enabled=!closing && call.call==null && !call.busy && session.phase==dev.koko.chat.desktop.session.SessionState.ONLINE) { Text("语音通话") }
                 if(selected?.type=="GROUP") TextButton(model::openGroupManagement,enabled=!closing) { Text("群成员") }
             }
-            Text(state.notice,fontSize=11.sp,color=Color(0xFF77817D))
+            Text(if(call.call==null && call.notice.isNotBlank()) call.notice else state.notice,fontSize=11.sp,color=Color(0xFF77817D))
             HorizontalDivider()
             if(selected!=null) Box(Modifier.fillMaxWidth().height(36.dp),contentAlignment=Alignment.Center) {
                 if(state.hasOlderMessages || state.historyError!=null || state.loadingOlder) TextButton(
@@ -121,6 +123,14 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
                     val status=if(!mine) sender else if(selected.type=="DIRECT" && message.seq.toLong()<=(selected.peerLastReadSeq?.toLong()?:0L)) "对方已读" else "已保存到服务器"
                     MessageBubble(message.text,status,mine)
                     message.attachment?.let { attachment ->
+                        if(attachment.kind=="IMAGE") {
+                            LaunchedEffect(attachment.id,session.sessionId) { model.loadThumbnail(message) }
+                            val bytes=state.thumbnails[attachment.id]
+                            val thumbnail=remember(bytes) { bytes?.let { runCatching { org.jetbrains.skia.Image.makeFromEncoded(it).toComposeImageBitmap() }.getOrNull() } }
+                            if(thumbnail!=null) Box(Modifier.fillMaxWidth(),contentAlignment=if(mine) Alignment.CenterEnd else Alignment.CenterStart) {
+                                Image(thumbnail,"图片缩略图",Modifier.widthIn(max=240.dp).heightIn(max=160.dp).clickable { model.openAttachment(message) })
+                            }
+                        }
                         Row(Modifier.fillMaxWidth(),horizontalArrangement=if(mine) Arrangement.End else Arrangement.Start) {
                             Text("%.1f KiB".format(attachment.size/1024.0),fontSize=11.sp,modifier=Modifier.align(Alignment.CenterVertically))
                             if(attachment.kind=="IMAGE") TextButton({model.openAttachment(message)},enabled=!closing && !state.attachmentBusy) { Text("查看图片") }
@@ -147,6 +157,17 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
                 Text(if(state.attachmentBusy) "正在处理附件…" else "最多 10 MiB · 断线后自动重试",fontSize=10.sp,color=Color(0xFF77817D))
             }
         }
+    }
+    call.call?.let { active ->
+        val incoming=active.state=="RINGING" && active.callerSession!=session.sessionId
+        AlertDialog(onDismissRequest={},title={Text(if(incoming) "语音来电" else "语音通话")},
+            text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
+                Text(state.conversations.find { it.id==active.conversationId }?.nickname ?: "联系人")
+                Text(call.notice)
+                if(call.connected) TextButton(model::muteVoice) { Text(if(call.muted) "取消静音" else "静音") }
+            }},
+            confirmButton={if(incoming) Button(model::acceptVoice,enabled=!call.busy) { Text("接听") }},
+            dismissButton={TextButton(model::hangupVoice,enabled=!call.busy) { Text(if(incoming) "拒绝" else "挂断") }})
     }
     state.preview?.let { preview ->
         val bitmap=remember(preview) { runCatching { org.jetbrains.skia.Image.makeFromEncoded(preview.bytes).toComposeImageBitmap() }.getOrNull() }

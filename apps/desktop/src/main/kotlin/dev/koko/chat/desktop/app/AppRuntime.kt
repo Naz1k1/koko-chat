@@ -35,14 +35,16 @@ class AppRuntime {
     private val connector = KtorImConnector(client)
     val sessions = SessionManager(scope, KtorAuthApi(client), connector, store::deviceId)
     val chat = ChatModel(scope, sessions, connector, KtorChatApi(client), AppPaths.preferencesFile().parent.resolve("accounts"), databaseDispatcher, KtorAttachmentApi(client))
+    val calls = dev.koko.chat.desktop.call.CallModel(scope,sessions,connector,client)
     val contacts = ContactModel(scope, sessions, KtorContactApi(client))
     val groups = GroupModel(scope, sessions, chat, KtorGroupApi(client))
-    val screenModel = DesktopScreenModel(scope, store, KtorServiceProbe(client), sessions, chat, contacts, groups)
+    val screenModel = DesktopScreenModel(scope, store, KtorServiceProbe(client), sessions, chat, contacts, groups, calls)
 
     /** 先等待页面任务退出，再关闭客户端和数据库；finally 保证异常时仍继续释放资源。 */
     suspend fun closeResources() {
         try {
             screenModel.close()
+            calls.close()
             groups.close()
             contacts.close()
             chat.close()

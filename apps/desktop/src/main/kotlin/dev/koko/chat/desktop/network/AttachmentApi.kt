@@ -19,6 +19,7 @@ interface AttachmentApi {
     suspend fun create(settings:ServiceSettings,token:String,conversationId:String,body:UploadCreate):UploadView
     suspend fun upload(settings:ServiceSettings,token:String,id:String,bytes:ByteArray):UploadView
     suspend fun download(settings:ServiceSettings,token:String,attachment:AttachmentReference):ByteArray
+    suspend fun thumbnail(settings:ServiceSettings,token:String,id:String):ByteArray? = null
 }
 internal fun fileHash(bytes:ByteArray):String = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 class KtorAttachmentApi(private val client:HttpClient):AttachmentApi {
@@ -31,6 +32,13 @@ class KtorAttachmentApi(private val client:HttpClient):AttachmentApi {
             bearerAuth(token);contentType(ContentType.Application.OctetStream);setBody(bytes)
             timeout { requestTimeoutMillis=60_000;socketTimeoutMillis=30_000 }
         }.body()
+    override suspend fun thumbnail(settings:ServiceSettings,token:String,id:String):ByteArray =
+        client.prepareGet("${settings.forAuthentication().apiBaseUrl}/api/attachments/$id/thumbnail") { bearerAuth(token) }.execute { response ->
+            val expected=response.headers["X-Content-SHA256"] ?: error("缺少缩略图校验值")
+            val channel=response.bodyAsChannel();val output=java.io.ByteArrayOutputStream();val buffer=ByteArray(8192)
+            while(true) { val count=channel.readAvailable(buffer,0,buffer.size);if(count<0) break;require(output.size()+count<=131072);output.write(buffer,0,count) }
+            output.toByteArray().also { require(fileHash(it)==expected) }
+        }
     override suspend fun download(settings:ServiceSettings,token:String,attachment:AttachmentReference):ByteArray {
         require(attachment.size in 1..10*1024*1024) { "附件大小超出限制" }
         val bytes=client.prepareGet("${settings.forAuthentication().apiBaseUrl}/api/attachments/${attachment.id}/content") {

@@ -145,13 +145,39 @@ class DesktopRenderTest {
                     val scene=ImageComposeScene(width=width,height=height,coroutineContext=coroutineContext)
                     try {
                         scene.setContent { MaterialTheme(colorScheme=lightColorScheme(primary=Color(0xFF167565))) {
-                            ChatWorkspace(session,ChatUiState(listOf(info),"10",messages,notice="消息已同步",preview=if(preview) dev.koko.chat.desktop.chat.AttachmentPreview(picture,bytes) else null),false,model)
+                            ChatWorkspace(session,ChatUiState(listOf(info),"10",messages,notice="消息已同步",thumbnails=mapOf(picture.id to bytes),preview=if(preview) dev.koko.chat.desktop.chat.AttachmentPreview(picture,bytes) else null),false,model)
                         } }
                         // render 默认时间为 0；显式推进动画帧后再截图，避免捕获半透明的中间状态。
                         repeat(24) { scene.render(System.nanoTime()).close();delay(16) }
                         val labels=scene.semanticsOwners.asSequence().flatMap { flatten(it.rootSemanticsNode) }.flatMap { it.config.getOrNull(SemanticsProperties.Text).orEmpty().asSequence() }.map { it.text }.toList()
                         assertTrue(if(preview) "关闭" in labels else "查看图片" in labels && "保存文件" in labels && "图片" in labels && "文件" in labels)
                         scene.render(System.nanoTime()).use { image -> image.encodeToData()!!.use { Files.write(directory.resolve("attachment-${if(preview) "preview" else "chat"}-$width.png"),it.bytes) } }
+                    } finally { scene.close() }
+                }
+            } finally { model.close();store.close() }
+        }
+    }
+    @Test fun `render incoming and active voice call controls`() {
+        val output=System.getenv("KOKO_CHAT_RENDER_DIR");assumeTrue(!output.isNullOrBlank())
+        runBlocking(Dispatchers.Main) {
+            val directory=Path.of(output!!);Files.createDirectories(directory)
+            val store=PreferencesStore(directory.resolve("voice-preview-settings.db"),Dispatchers.IO)
+            val model=DesktopScreenModel(this,store,object:ServiceProbe {override suspend fun check(settings:ServiceSettings)=error("No network")})
+            try {
+                model.state.first { it.initialized }
+                val info=ConversationInfo("10","2","xiaoyu","小雨","epoch","1","0")
+                val session=SessionUiState(SessionState.ONLINE,UserProfile("1","yako","Yako"),"IM 在线","preview-session")
+                for(active in listOf(false,true)) {
+                    (model.callState as kotlinx.coroutines.flow.MutableStateFlow).value=dev.koko.chat.desktop.call.CallUiState(
+                        dev.koko.chat.desktop.call.VoiceCall("voice","10","2","1","other","preview-session",if(active) "ACTIVE" else "RINGING",null,"2026-09-08T00:00:00Z"),
+                        connected=active,notice=if(active) "语音通话中" else "收到语音来电")
+                    val scene=ImageComposeScene(width=960,height=640,coroutineContext=coroutineContext)
+                    try {
+                        scene.setContent { MaterialTheme { ChatWorkspace(session,ChatUiState(listOf(info),"10",notice="消息已同步"),false,model) } }
+                        repeat(24) { scene.render(System.nanoTime()).close();delay(16) }
+                        val labels=scene.semanticsOwners.asSequence().flatMap { flatten(it.rootSemanticsNode) }.flatMap { it.config.getOrNull(SemanticsProperties.Text).orEmpty().asSequence() }.map { it.text }.toList()
+                        assertTrue(if(active) "静音" in labels && "挂断" in labels else "接听" in labels && "拒绝" in labels)
+                        scene.render(System.nanoTime()).use { image -> image.encodeToData()!!.use { Files.write(directory.resolve("voice-${if(active) "active" else "incoming"}-960.png"),it.bytes) } }
                     } finally { scene.close() }
                 }
             } finally { model.close();store.close() }

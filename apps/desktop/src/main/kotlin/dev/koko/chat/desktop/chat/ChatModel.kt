@@ -16,7 +16,7 @@ data class ChatUiState(val conversations:List<ConversationInfo> = emptyList(),va
     val messages:List<ChatMessage> = emptyList(),val pending:List<ChatStore.Pending> = emptyList(),
     val notice:String="正在同步会话…",val creating:Boolean=false,
     val hasOlderMessages:Boolean=false,val loadingOlder:Boolean=false,val historyError:String?=null,
-    val latestRevision:Long=0,val attachmentBusy:Boolean=false,val preview:AttachmentPreview?=null)
+    val latestRevision:Long=0,val attachmentBusy:Boolean=false,val preview:AttachmentPreview?=null,val thumbnails:Map<String,ByteArray> = emptyMap())
 data class AttachmentPreview(val attachment:AttachmentReference,val bytes:ByteArray)
 class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,private val connector:ImConnector,
     private val api:ChatApi,private val directory:Path,private val dispatcher:CoroutineDispatcher,private val attachments:AttachmentApi?=null) {
@@ -39,7 +39,7 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
                             launch { while(isActive) { try { sync(current) } catch(error:Exception) { ensureActive();notice(current,"同步暂未完成，稍后会自动重试") };delay(10_000) } }
                             launch {
                                 connector.events.collect { event ->
-                                    if(event.sessionId==current.sessionId) {
+                                    if(event.sessionId==current.sessionId && event.envelope["type"]?.jsonPrimitive?.content!="CALL_CHANGED") {
                                         try {
                                             if(event.envelope["type"]?.jsonPrimitive?.content=="READ_UPDATE") {
                                                 current.sync.withLock {
@@ -157,6 +157,16 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
             finally { if(binding===current) mutable.update { it.copy(attachmentBusy=false) } }
         }
     }
+    fun loadThumbnail(message:ChatMessage) {
+        val api=attachments?:return;val current=binding?:return;val id=message.attachment?.id?:return;val key=current.windowKey
+        if(state.value.thumbnails.containsKey(id)) return
+        current.scope.launch {
+            try {
+                val bytes=sessions.withAccess { settings,token -> api.thumbnail(settings,token,id) }?:return@launch
+                if(binding===current && current.windowKey==key) mutable.update { it.copy(thumbnails=(it.thumbnails.toList().takeLast(31)+Pair(id,bytes)).toMap()) }
+            } catch(error:Exception) { ensureActive() /* 预览失败不影响查看原图和保存文件。 */ }
+        }
+    }
     fun closePreview() { mutable.update { it.copy(preview=null) } }
     /** 每次打开或保存都重新请求权限；切换账号、会话或成员周期后丢弃迟到的结果。 */
     fun attachment(message:ChatMessage,destination:Path?=null) {
@@ -245,7 +255,7 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
             } catch(error:Exception) {
                 currentCoroutineContext().ensureActive()
                 val permanent=(error is ImCommandFailure && error.code in setOf("INVALID_MESSAGE","NOT_A_MEMBER","MEMBERSHIP_CHANGED","IDEMPOTENCY_CONFLICT","INVALID_ATTACHMENT","ATTACHMENT_USED","ATTACHMENT_NOT_READY")) ||
-                    (error is ResponseException && error.response.status.value in setOf(400,403,404,409,413,415)) ||
+                    (error is ResponseException && error.response.status.value in setOf(400,403,404,409,410,413,415)) ||
                     (pending.attachmentId!=null && (error is IllegalArgumentException || error is java.nio.file.NoSuchFileException))
                 current.store.retry(pending.clientMsgId,permanent,if(permanent) { if(pending.attachmentId!=null) "发送被拒绝或文件已失效，请检查权限并重新选择文件" else error.message ?: "消息被拒绝，请检查会话权限" } else "确认未收到，将使用原编号重试")
             }
@@ -288,7 +298,7 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
         val pending=current.store.pending().filter { it.conversationId==selected }
         if(binding===current && state.value.selectedId==requested) mutable.update { it.copy(
             conversations=conversations,selectedId=selected,messages=window.messages,pending=pending,hasOlderMessages=window.hasOlder,
-            loadingOlder=if(changed) false else it.loadingOlder,historyError=if(changed) null else it.historyError,preview=if(changed) null else it.preview) }
+            loadingOlder=if(changed) false else it.loadingOlder,historyError=if(changed) null else it.historyError,preview=if(changed) null else it.preview,thumbnails=if(changed) emptyMap() else it.thumbnails) }
     }
     private fun notice(current:Binding,text:String) { if(binding===current) mutable.update { it.copy(notice=text) } }
     suspend fun close() = job.cancelAndJoin()
