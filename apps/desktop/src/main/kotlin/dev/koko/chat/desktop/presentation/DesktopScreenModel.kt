@@ -79,6 +79,8 @@ class DesktopScreenModel(
     fun retryGroupOperation() { groups?.retry() }
     fun dismissGroupOperation() { groups?.dismissPending() }
     fun readVisible(id:String,epoch:String,seq:Long) { chat?.readVisible(id,epoch,seq) }
+    fun loadOlderMessages() { chat?.loadOlder() }
+    fun showLatestMessages() { chat?.showLatest() }
     fun selectConversation(id:String) { chat?.select(id) }
     fun createConversation(account:String) { chat?.create(account) }
     fun sendMessage(text:String,onSaved:()->Unit) { chat?.send(text,onSaved) }

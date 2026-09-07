@@ -14,13 +14,16 @@ import java.nio.file.Path
 /** 页面列表来自账号独立的本地库；消息推送是增量提示，固定上界同步负责填补缺口。 */
 data class ChatUiState(val conversations:List<ConversationInfo> = emptyList(),val selectedId:String?=null,
     val messages:List<ChatMessage> = emptyList(),val pending:List<ChatStore.Pending> = emptyList(),
-    val notice:String="正在同步会话…",val creating:Boolean=false)
+    val notice:String="正在同步会话…",val creating:Boolean=false,
+    val hasOlderMessages:Boolean=false,val loadingOlder:Boolean=false,val historyError:String?=null,
+    val latestRevision:Long=0)
 class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,private val connector:ImConnector,
     private val api:ChatApi,private val directory:Path,private val dispatcher:CoroutineDispatcher) {
     private val job=SupervisorJob(parent.coroutineContext[Job]);private val scope=CoroutineScope(parent.coroutineContext+job)
     private val mutable=MutableStateFlow(ChatUiState());val state:StateFlow<ChatUiState> = mutable.asStateFlow()
     private val json=Json { ignoreUnknownKeys=true }
-    private data class Binding(val sessionId:String,val userId:String,val store:ChatStore,val scope:CoroutineScope,val sync:Mutex=Mutex())
+    private data class Binding(val sessionId:String,val userId:String,val store:ChatStore,val scope:CoroutineScope,val sync:Mutex=Mutex(),
+        val view:Mutex=Mutex(),var windowKey:Pair<String,String>?=null,var historyStart:Long?=null,var navigation:Long=0)
     private var binding:Binding?=null
     init {
         scope.launch {
@@ -74,9 +77,46 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
             catch(error:Exception) { ensureActive();notice(current,"已读状态稍后重试") }
         }
     }
-    fun select(id:String) { val current=binding?:return;current.scope.launch { refreshView(current,id) } }
+    /** 展示分页只查当前账号缓存；重复点击合并，切换会话后的结果不能写回新页面。 */
+    fun loadOlder() {
+        val current=binding?:return;val captured=state.value;val navigation=current.navigation
+        val info=captured.conversations.find { it.id==captured.selectedId }?:return
+        val before=captured.messages.firstOrNull()?.seq?.toLong()?:return
+        if(captured.loadingOlder || !captured.hasOlderMessages) return
+        mutable.update { it.copy(loadingOlder=true,historyError=null) }
+        current.scope.launch {
+            current.view.withLock {
+                val key=info.id to info.membershipEpoch
+                try {
+                    if(binding!==current || current.windowKey!=key || current.navigation!=navigation || state.value.selectedId!=info.id) return@withLock
+                    val older=current.store.olderMessages(info,before)
+                    if(older.isNotEmpty()) current.historyStart=older.first().seq.toLong()
+                    refreshViewLocked(current)
+                } catch(error:Exception) {
+                    ensureActive()
+                    if(binding===current && current.windowKey==key) mutable.update { it.copy(historyError="历史消息加载失败，请重试") }
+                } finally {
+                    if(binding===current && current.windowKey==key) mutable.update { it.copy(loadingOlder=false) }
+                }
+            }
+        }
+    }
+    fun showLatest() {
+        val current=binding?:return;val key=current.windowKey?:return;val navigation=current.navigation
+        current.scope.launch { current.view.withLock {
+            if(binding===current && current.windowKey==key && current.navigation==navigation) {
+                try {
+                    current.historyStart=null
+                    refreshViewLocked(current)
+                    mutable.update { it.copy(latestRevision=it.latestRevision+1,historyError=null) }
+                } catch(error:Exception) { ensureActive();notice(current,"暂时无法定位最新消息，请稍后重试") }
+            }
+        } }
+    }
+    fun select(id:String) { val current=binding?:return;current.navigation++;current.scope.launch { refreshView(current,id) } }
     fun create(account:String) {
         val current=binding?:return;if(state.value.creating) return
+        current.navigation++
         mutable.update { it.copy(creating=true) }
         current.scope.launch {
             try {
@@ -91,7 +131,7 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
     }
     fun refresh() { val current=binding?:return;current.scope.launch { try { sync(current) } catch(error:Exception) { ensureActive();notice(current,"同步暂未完成，请稍后刷新") } } }
     fun open(id:String) {
-        val current=binding?:return
+        val current=binding?:return;current.navigation++
         current.scope.launch {
             try { current.sync.withLock {
                 val info=sessions.withAccess { settings,token -> api.summary(settings,token,id) }
@@ -189,14 +229,21 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
             }
         }
     }
-    private suspend fun refreshView(current:Binding,preferredId:String?=null) {
+    private suspend fun refreshView(current:Binding,preferredId:String?=null) = current.view.withLock { refreshViewLocked(current,preferredId) }
+    /** 展示范围按会话和成员周期隔离，加载、实时推送和读回执刷新共用视图锁。 */
+    private suspend fun refreshViewLocked(current:Binding,preferredId:String?=null) {
         val requested=state.value.selectedId
         val conversations=current.store.conversations()
         val selected=(preferredId?:requested)?.takeIf { id -> conversations.any { it.id==id } } ?: conversations.firstOrNull()?.id
         val info=conversations.find { it.id==selected }
-        val messages=if(info==null) emptyList() else current.store.messages(info)
+        val key=info?.let { it.id to it.membershipEpoch }
+        val changed=current.windowKey!=key
+        if(changed) { current.windowKey=key;current.historyStart=null }
+        val window=if(info==null) ChatStore.MessageWindow(emptyList(),false) else current.store.messageWindow(info,current.historyStart)
         val pending=current.store.pending().filter { it.conversationId==selected }
-        if(binding===current && state.value.selectedId==requested) mutable.update { it.copy(conversations=conversations,selectedId=selected,messages=messages,pending=pending) }
+        if(binding===current && state.value.selectedId==requested) mutable.update { it.copy(
+            conversations=conversations,selectedId=selected,messages=window.messages,pending=pending,hasOlderMessages=window.hasOlder,
+            loadingOlder=if(changed) false else it.loadingOlder,historyError=if(changed) null else it.historyError) }
     }
     private fun notice(current:Binding,text:String) { if(binding===current) mutable.update { it.copy(notice=text) } }
     suspend fun close() = job.cancelAndJoin()

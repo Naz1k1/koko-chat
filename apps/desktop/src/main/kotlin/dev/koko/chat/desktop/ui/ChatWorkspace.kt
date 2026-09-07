@@ -14,7 +14,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import dev.koko.chat.desktop.chat.ChatUiState
 import dev.koko.chat.desktop.contact.ContactUiState
 import dev.koko.chat.desktop.group.GroupUiState
@@ -25,17 +24,23 @@ import dev.koko.chat.desktop.session.SessionUiState
 @Composable
 internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Boolean,model:DesktopScreenModel,
                            contacts:ContactUiState = ContactUiState(loading = false),
-                           groups:GroupUiState = GroupUiState(),windowFocused:Boolean=false,settingsOpen:Boolean=false,onReadVisible:(String,String,Long)->Unit=model::readVisible) {
+                           groups:GroupUiState = GroupUiState(),windowFocused:Boolean=false,settingsOpen:Boolean=false,onReadVisible:(String,String,Long)->Unit=model::readVisible,
+                           onLoadOlder:()->Unit=model::loadOlderMessages,onShowLatest:()->Unit=model::showLatestMessages,
+                           messageListState:LazyListState=rememberLazyListState()) {
     var showContacts by remember(session.user?.id) { mutableStateOf(false) }
     var peer by remember { mutableStateOf("") }
     var draft by remember(state.selectedId) { mutableStateOf("") }
     val selected=state.conversations.find { it.id==state.selectedId }
-    val list=rememberLazyListState()
+    val list=messageListState
     val total=state.messages.size+state.pending.size
-    val scope=rememberCoroutineScope()
-    var positioned by remember(state.selectedId) { mutableStateOf(false) }
-    // 初次打开定位到末尾；后续消息不把正在阅读历史的用户强行拉到底部。
-    LaunchedEffect(state.selectedId,total) { if(total>0 && !positioned) { list.scrollToItem(total-1);positioned=true } }
+    var positioned by remember(state.selectedId,selected?.membershipEpoch) { mutableStateOf(false) }
+    var appliedRevision by remember(state.selectedId,selected?.membershipEpoch) { mutableStateOf(state.latestRevision) }
+    // 仅初次打开或显式跳回最新时定位；向前插入由 LazyColumn 的消息稳定 key 保持像素位置。
+    LaunchedEffect(state.selectedId,selected?.membershipEpoch,total,state.latestRevision) {
+        if(total>0 && (!positioned || appliedRevision!=state.latestRevision)) {
+            list.scrollToItem(total-1);positioned=true;appliedRevision=state.latestRevision
+        }
+    }
     val currentMessages by rememberUpdatedState(state.messages)
     val reportRead by rememberUpdatedState(onReadVisible)
     val reading=windowFocused && !closing && !settingsOpen && !showContacts && groups.dialog==null
@@ -95,6 +100,16 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
             }
             Text(state.notice,fontSize=11.sp,color=Color(0xFF77817D))
             HorizontalDivider()
+            if(selected!=null) Box(Modifier.fillMaxWidth().height(36.dp),contentAlignment=Alignment.Center) {
+                if(state.hasOlderMessages || state.historyError!=null || state.loadingOlder) TextButton(
+                    onClick=onLoadOlder,enabled=!closing && !state.loadingOlder) {
+                    Text(when { state.loadingOlder -> "正在加载…";state.historyError!=null -> "加载失败，点击重试";else -> "加载更早消息" },fontSize=12.sp)
+                } else Text(when {
+                    state.messages.isEmpty() && selected.latestSeq.toLong()<selected.visibleFromSeq.toLong() -> "还没有消息"
+                    state.messages.isEmpty() || state.messages.first().seq.toLong()>selected.visibleFromSeq.toLong() -> "更早消息同步中…"
+                    else -> "已到当前可见历史起点"
+                },fontSize=11.sp,color=Color(0xFF77817D))
+            }
             if(selected==null) {
                 Box(Modifier.weight(1f).fillMaxWidth(),contentAlignment=Alignment.Center) { Text("输入对方账号，创建你的第一个单聊",color=Color(0xFF77817D)) }
             } else LazyColumn(Modifier.weight(1f).fillMaxWidth(),state=list,verticalArrangement=Arrangement.spacedBy(12.dp)) {
@@ -111,7 +126,7 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
                     }
                 }
             }
-            if(selected!=null && list.canScrollForward) TextButton({ scope.launch { if(total>0) list.animateScrollToItem(total-1) } },modifier=Modifier.align(Alignment.End)) { Text("查看最新消息") }
+            if(selected!=null && list.canScrollForward) TextButton(onShowLatest,enabled=!closing && !state.loadingOlder,modifier=Modifier.align(Alignment.End)) { Text("查看最新消息") }
             Row(verticalAlignment=Alignment.Bottom,horizontalArrangement=Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(draft,{draft=it},placeholder={Text("输入消息…")},enabled=selected!=null && !closing,
                     modifier=Modifier.weight(1f).heightIn(min=88.dp,max=144.dp),maxLines=5)

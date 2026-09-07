@@ -79,3 +79,11 @@ DELETE FROM pending_read WHERE conversation_id=?;
 -- 计数使用所有缓存消息，不能受聊天窗口最近 200 条的展示上限影响。
 messagesAfter:
 SELECT * FROM cached_message WHERE conversation_id=? AND epoch=? AND seq>? ORDER BY seq;
+
+-- 展示分页与设备连续接收游标分离；使用序号游标，避免新消息插入造成 OFFSET 漂移。
+olderMessages:
+SELECT * FROM cached_message WHERE conversation_id=? AND epoch=? AND seq>=? AND seq<? ORDER BY seq DESC LIMIT ?;
+messagesFrom:
+SELECT * FROM cached_message WHERE conversation_id=? AND epoch=? AND seq>=? ORDER BY seq;
+hasMessagesBefore:
+SELECT EXISTS(SELECT 1 FROM cached_message WHERE conversation_id=? AND epoch=? AND seq>=? AND seq<?);

@@ -77,8 +77,32 @@ class ChatStore(directory:Path,server:String,private val userId:String,private v
             cursor
         }
     }
-    suspend fun messages(info:ConversationInfo):List<ChatMessage> = withContext(dispatcher) {
-        db().chatCacheQueries.messages(info.id,info.membershipEpoch).executeAsList().map { json.decodeFromString<ChatMessage>(it.payload) }.reversed()
+    data class MessageWindow(val messages:List<ChatMessage>,val hasOlder:Boolean)
+    /** 默认展示最近 200 条；用户展开历史后固定起点，刷新与新消息不能收回已加载的内容。 */
+    suspend fun messageWindow(info:ConversationInfo,fromSeq:Long?=null):MessageWindow = withContext(dispatcher) {
+        val db=db();val q=db.chatCacheQueries
+        db.transactionWithResult {
+            require(q.conversation(info.id).executeAsOneOrNull()?.epoch==info.membershipEpoch) { "成员周期不一致，请重新同步" }
+            val messages=if(fromSeq==null) q.messages(info.id,info.membershipEpoch).executeAsList()
+                .map { json.decodeFromString<ChatMessage>(it.payload) }.reversed()
+            else q.messagesFrom(info.id,info.membershipEpoch,maxOf(fromSeq,info.visibleFromSeq.toLong())).executeAsList()
+                .map { json.decodeFromString<ChatMessage>(it.payload) }
+            val hasOlder=messages.firstOrNull()?.let {
+                q.hasMessagesBefore(info.id,info.membershipEpoch,info.visibleFromSeq.toLong(),it.seq.toLong()).executeAsOne()
+            } ?: false
+            MessageWindow(messages,hasOlder)
+        }
+    }
+    suspend fun messages(info:ConversationInfo):List<ChatMessage> = messageWindow(info).messages
+    /** 向前查询至多一页，不修改本地消息、已读进度或设备接收游标。 */
+    suspend fun olderMessages(info:ConversationInfo,beforeSeq:Long,limit:Int=50):List<ChatMessage> = withContext(dispatcher) {
+        require(limit in 1..100 && beforeSeq>0) { "历史分页参数不合法" }
+        val db=db();val q=db.chatCacheQueries
+        db.transactionWithResult {
+            require(q.conversation(info.id).executeAsOneOrNull()?.epoch==info.membershipEpoch) { "成员周期不一致，请重新同步" }
+            q.olderMessages(info.id,info.membershipEpoch,info.visibleFromSeq.toLong(),beforeSeq,limit.toLong()).executeAsList()
+                .map { json.decodeFromString<ChatMessage>(it.payload) }.reversed()
+        }
     }
     suspend fun enqueue(info:ConversationInfo,text:String):String = withContext(dispatcher) {
         require(text.isNotBlank() && text.toByteArray().size<=4096) { "消息不能为空，且最多 4096 UTF-8 字节" }
