@@ -1,0 +1,471 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mxfile host="drawio" version="31.4.2" type="device">
+  <diagram name="首期：单进程后端 + RabbitMQ" id="首期">
+    <mxGraphModel dx="2320" dy="1710" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2320" pageHeight="1710" math="0" shadow="0" background="#ffffff">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" value="首期：单进程后端 + RabbitMQ" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=40;fontColor=#203046;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="30" width="2200" height="70" />
+        </mxCell>
+        <mxCell id="3" value="Java 21 · Spring Boot 3.5 · Netty 保留   |   先持久化，再发布任务，消费后推送到本节点" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=24;fontColor=#203046;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="110" width="2200" height="40" />
+        </mxCell>
+        <mxCell id="4" value="&lt;b&gt;桌面客户端 · Kotlin + Compose Desktop&lt;/b&gt;&lt;br&gt;MVVM · StateFlow · Ktor HTTPS + WSS&lt;br&gt;SQLDelight + SQLite" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=24;spacing=10;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="760" y="170" width="700" height="140" />
+        </mxCell>
+        <mxCell id="5" value="同一个后端进程" style="swimlane;startSize=50;horizontal=1;container=1;collapsible=0;pointerEvents=0;rounded=1;arcSize=8;html=1;whiteSpace=wrap;fillColor=#f5f5f5;swimlaneFillColor=#ffffff;strokeColor=#929ca8;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=26;fontStyle=1;align=left;spacingLeft=20;align=center;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="240" y="380" width="1680" height="580" />
+        </mxCell>
+        <mxCell id="6" value="&lt;b&gt;HTTP Controller&lt;/b&gt;&lt;br&gt;登录 / 好友 / 群组 / 同步" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="5">
+          <mxGeometry as="geometry" x="60" y="90" width="350" height="110" />
+        </mxCell>
+        <mxCell id="7" value="&lt;b&gt;Service → MyBatis Mapper&lt;/b&gt;&lt;br&gt;用户 / 消息 / 群组 / 游标同步" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="5">
+          <mxGeometry as="geometry" x="600" y="90" width="470" height="110" />
+        </mxCell>
+        <mxCell id="8" value="&lt;b&gt;Netty WebSocket&lt;/b&gt;&lt;br&gt;鉴权 / 心跳 / 本地 Channel" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="5">
+          <mxGeometry as="geometry" x="1270" y="90" width="350" height="110" />
+        </mxCell>
+        <mxCell id="9" value="&lt;b&gt;OutboxPublisher&lt;/b&gt;&lt;br&gt;读取已提交 outbox" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=24;spacing=10;" vertex="1" parent="5">
+          <mxGeometry as="geometry" x="60" y="330" width="350" height="130" />
+        </mxCell>
+        <mxCell id="10" value="&lt;b&gt;DispatchConsumer / RouteService&lt;/b&gt;&lt;br&gt;群成员查 MySQL；路由读 Redis&lt;br&gt;群扇出按节点聚合" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=21;spacing=10;" vertex="1" parent="5">
+          <mxGeometry as="geometry" x="600" y="330" width="470" height="140" />
+        </mxCell>
+        <mxCell id="11" value="&lt;b&gt;GatewayDeliveryConsumer&lt;/b&gt;&lt;br&gt;只消费本节点在线队列" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=21;spacing=10;" vertex="1" parent="5">
+          <mxGeometry as="geometry" x="1270" y="330" width="350" height="130" />
+        </mxCell>
+        <mxCell id="12" value="&lt;b&gt;MySQL · 事实数据&lt;/b&gt;&lt;br&gt;用户 / 群成员 / 会话&lt;br&gt;message / outbox / 游标" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=15;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="50" y="1120" width="410" height="170" />
+        </mxCell>
+        <mxCell id="13" value="&lt;b&gt;Redis&lt;/b&gt;&lt;br&gt;票据 / 在线设备路由 / TTL&lt;br&gt;不存 Channel" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=21;spacing=10;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1990" y="480" width="280" height="150" />
+        </mxCell>
+        <mxCell id="14" value="RabbitMQ" style="swimlane;startSize=50;horizontal=1;container=1;collapsible=0;pointerEvents=0;rounded=1;arcSize=8;html=1;whiteSpace=wrap;fillColor=#fff2cc;swimlaneFillColor=#ffffff;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=26;fontStyle=1;align=left;spacingLeft=20;spacingLeft=540;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="590" y="1020" width="1590" height="380" />
+        </mxCell>
+        <mxCell id="15" value="&lt;b&gt;业务队列 · 持久化&lt;/b&gt;&lt;br&gt;quorum&lt;br&gt;可靠分发任务" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="14">
+          <mxGeometry as="geometry" x="80" y="110" width="430" height="150" />
+        </mxCell>
+        <mxCell id="16" value="&lt;b&gt;本节点在线队列 · 临时&lt;/b&gt;&lt;br&gt;classic · exclusive · auto-delete&lt;br&gt;broker 生成名称" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=21;spacing=10;" vertex="1" parent="14">
+          <mxGeometry as="geometry" x="730" y="110" width="440" height="150" />
+        </mxCell>
+        <mxCell id="17" value="&lt;b&gt;Retry / DLQ&lt;/b&gt;&lt;br&gt;quorum · 持久化&lt;br&gt;有上限重试 → DLQ" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=22;spacing=10;" vertex="1" parent="14">
+          <mxGeometry as="geometry" x="1270" y="110" width="270" height="150" />
+        </mxCell>
+        <mxCell id="18" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=2;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="4" target="6">
+          <mxGeometry as="geometry" x="0.35" relative="1">
+            <mxPoint as="offset" x="0" y="0" />
+            <Array as="points">
+              <mxPoint x="900" y="340" />
+              <mxPoint x="475" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="19" value="WSS" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=2;exitX=0.8;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="4" target="8">
+          <mxGeometry as="geometry" x="0.35" relative="1">
+            <mxPoint as="offset" x="0" y="0" />
+            <Array as="points">
+              <mxPoint x="1320" y="340" />
+              <mxPoint x="1685" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="20" value="业务线程池" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="6" target="7">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="0" y="-25" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="21" value="业务线程池" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="8" target="7">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="0" y="-25" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="22" value="① message + outbox 同事务" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=2;exitX=0.2;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="7" target="12">
+          <mxGeometry as="geometry" x="-0.4" relative="1">
+            <mxPoint as="offset" x="0" y="-20" />
+            <Array as="points">
+              <mxPoint x="934" y="630" />
+              <mxPoint x="190" y="630" />
+              <mxPoint x="190" y="1050" />
+              <mxPoint x="255" y="1050" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="23" value="读取已提交 outbox" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#82b366;strokeWidth=2;exitX=0.75;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="12" target="9">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="90" y="0" />
+            <Array as="points">
+              <mxPoint x="357.5" y="990" />
+              <mxPoint x="475" y="990" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="24" value="② 发布业务任务" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.15;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="9" target="15">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="-100" y="0" />
+            <Array as="points">
+              <mxPoint x="735" y="775" />
+              <mxPoint x="735" y="1050" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="25" value="③ 消费分发任务" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=0.9;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="15" target="10">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="110" y="0" />
+            <Array as="points">
+              <mxPoint x="1057" y="1050" />
+              <mxPoint x="1075" y="1050" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="26" value="④ 按 gatewayRoute 投递" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0.15;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="10" target="16">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="-115" y="0" />
+            <Array as="points">
+              <mxPoint x="1386" y="780" />
+              <mxPoint x="1386" y="1050" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="27" value="⑤ 仅本节点消费" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=0.85;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="16" target="11">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="110" y="0" />
+            <Array as="points">
+              <mxPoint x="1694" y="1050" />
+              <mxPoint x="1685" y="1050" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="28" value="本地 Channel 推送" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="11" target="8">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="110" y="0" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="29" value="票据 / TTL" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#9673a6;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;dashed=1;dashPattern=6 4;" edge="1" parent="1" source="8" target="13">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="0" y="-25" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="30" value="业务消费失败：有上限重试 / DLQ" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=1;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;dashed=1;dashPattern=6 4;" edge="1" parent="1" source="15" target="17">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="0" y="15" />
+            <Array as="points">
+              <mxPoint x="885" y="1350" />
+              <mxPoint x="1995" y="1350" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="31" value="&lt;b&gt;事务提交后返回 SEND_ACK&lt;/b&gt;；在线、离线统一落库。&lt;br&gt;所有发布：publisher confirm + mandatory return；所有消费：manual ACK；这些均不代表设备已读。&lt;br&gt;节点队列仅承载在线提示；队列重建更新路由，定期 / 重连时按 MySQL 游标补拉兜底。" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="240" y="1440" width="1940" height="130" />
+        </mxCell>
+        <mxCell id="32" value="图例" style="swimlane;startSize=50;horizontal=1;container=1;collapsible=0;pointerEvents=0;rounded=1;arcSize=8;html=1;whiteSpace=wrap;fillColor=#f5f5f5;swimlaneFillColor=#ffffff;strokeColor=#929ca8;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=16;fontStyle=1;align=left;spacingLeft=20;startSize=0;fillColor=#ffffff;swimlaneFillColor=#ffffff;strokeColor=#d8dee8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="90" y="1610" width="2150" height="80" />
+        </mxCell>
+        <mxCell id="33" value="颜色含义" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#203046;" vertex="1" parent="32">
+          <mxGeometry as="geometry" x="20" y="20" width="100" height="30" />
+        </mxCell>
+        <mxCell id="34" value="" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=20;spacing=10;rounded=0;" vertex="1" parent="32">
+          <mxGeometry as="geometry" x="140" y="30" width="30" height="20" />
+        </mxCell>
+        <mxCell id="35" value="接入 / 本地连接" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#203046;" vertex="1" parent="32">
+          <mxGeometry as="geometry" x="180" y="20" width="190" height="40" />
+        </mxCell>
+        <mxCell id="36" value="" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=20;spacing=10;rounded=0;" vertex="1" parent="32">
+          <mxGeometry as="geometry" x="370" y="30" width="30" height="20" />
+        </mxCell>
+        <mxCell id="37" value="客户端 / 业务" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#203046;" vertex="1" parent="32">
+          <mxGeometry as="geometry" x="410" y="20" width="190" height="40" />
+        </mxCell>
+        <mxCell id="38" value="" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=20;spacing=10;rounded=0;" vertex="1" parent="32">
+          <mxGeometry as="geometry" x="600" y="30" width="30" height="20" />
+        </mxCell>
+        <mxCell id="39" value="持久化事实" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#203046;" vertex="1" parent="32">
+          <mxGeometry as="geometry" x="640" y="20" width="190" height="40" />
+        </mxCell>
+        <mxCell id="40" value="" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=20;spacing=10;rounded=0;" vertex="1" parent="32">
+          <mxGeometry as="geometry" x="830" y="30" width="30" height="20" />
+        </mxCell>
+        <mxCell id="41" value="会话路由 / 票据" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#203046;" vertex="1" parent="32">
+          <mxGeometry as="geometry" x="870" y="20" width="190" height="40" />
+        </mxCell>
+        <mxCell id="42" value="" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=20;spacing=10;rounded=0;" vertex="1" parent="32">
+          <mxGeometry as="geometry" x="1060" y="30" width="30" height="20" />
+        </mxCell>
+        <mxCell id="43" value="消息队列 / 约束" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#203046;" vertex="1" parent="32">
+          <mxGeometry as="geometry" x="1100" y="20" width="190" height="40" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="扩展：同构节点与两级 RabbitMQ 队列" id="扩展">
+    <mxGraphModel dx="2400" dy="2080" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2400" pageHeight="2080" math="0" shadow="0" background="#ffffff">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="2" value="扩展：同构节点与两级 RabbitMQ 队列" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=40;fontColor=#203046;fontStyle=1;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="30" width="2280" height="70" />
+        </mxCell>
+        <mxCell id="3" value="业务队列跨节点竞争消费；节点在线队列按 gatewayRoute 定向投递，由各节点自己消费。" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=24;fontColor=#203046;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="60" y="110" width="2280" height="40" />
+        </mxCell>
+        <mxCell id="4" value="&lt;b&gt;桌面 A · 发送方&lt;/b&gt;&lt;br&gt;Kotlin + Compose Desktop" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=22;spacing=10;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="120" y="190" width="370" height="90" />
+        </mxCell>
+        <mxCell id="5" value="&lt;b&gt;桌面 B · 接收方&lt;/b&gt;&lt;br&gt;Kotlin + Compose Desktop" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=22;spacing=10;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1910" y="190" width="370" height="90" />
+        </mxCell>
+        <mxCell id="6" value="&lt;b&gt;入口 / Load Balancer&lt;/b&gt;&lt;br&gt;HTTPS + WSS" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=24;spacing=10;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="980" y="190" width="440" height="90" />
+        </mxCell>
+        <mxCell id="7" value="Node A · Java 21 / Spring Boot 3.5" style="swimlane;startSize=50;horizontal=1;container=1;collapsible=0;pointerEvents=0;rounded=1;arcSize=8;html=1;whiteSpace=wrap;fillColor=#f5f5f5;swimlaneFillColor=#ffffff;strokeColor=#929ca8;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=24;fontStyle=1;align=left;spacingLeft=20;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="80" y="390" width="600" height="1070" />
+        </mxCell>
+        <mxCell id="8" value="Node B · 同构部署" style="swimlane;startSize=50;horizontal=1;container=1;collapsible=0;pointerEvents=0;rounded=1;arcSize=8;html=1;whiteSpace=wrap;fillColor=#f5f5f5;swimlaneFillColor=#ffffff;strokeColor=#929ca8;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=24;fontStyle=1;align=left;spacingLeft=20;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="1720" y="390" width="600" height="1070" />
+        </mxCell>
+        <mxCell id="9" value="&lt;b&gt;HTTP / Service / MyBatis&lt;/b&gt;&lt;br&gt;message + outbox 事务&lt;br&gt;提交后 SEND_ACK&lt;br&gt;&lt;b&gt;OutboxPublisher&lt;/b&gt; 读取已提交任务" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="7">
+          <mxGeometry as="geometry" x="60" y="100" width="480" height="190" />
+        </mxCell>
+        <mxCell id="10" value="&lt;b&gt;HTTP / Service / MyBatis&lt;/b&gt;&lt;br&gt;message + outbox 事务&lt;br&gt;提交后 SEND_ACK&lt;br&gt;&lt;b&gt;OutboxPublisher&lt;/b&gt; 读取已提交任务" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="8">
+          <mxGeometry as="geometry" x="60" y="100" width="480" height="190" />
+        </mxCell>
+        <mxCell id="11" value="&lt;b&gt;DispatchConsumer / RouteService&lt;/b&gt;&lt;br&gt;可共享竞争消费&lt;br&gt;群扇出按节点聚合" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="7">
+          <mxGeometry as="geometry" x="60" y="420" width="480" height="150" />
+        </mxCell>
+        <mxCell id="12" value="&lt;b&gt;DispatchConsumer / RouteService&lt;/b&gt;&lt;br&gt;可共享竞争消费&lt;br&gt;群扇出按节点聚合" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="8">
+          <mxGeometry as="geometry" x="60" y="420" width="480" height="150" />
+        </mxCell>
+        <mxCell id="13" value="&lt;b&gt;GatewayDeliveryConsumer&lt;/b&gt;&lt;br&gt;仅消费 A 自己的队列" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="7">
+          <mxGeometry as="geometry" x="60" y="760" width="480" height="110" />
+        </mxCell>
+        <mxCell id="14" value="&lt;b&gt;GatewayDeliveryConsumer&lt;/b&gt;&lt;br&gt;仅消费 B 自己的队列" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="8">
+          <mxGeometry as="geometry" x="60" y="760" width="480" height="110" />
+        </mxCell>
+        <mxCell id="15" value="&lt;b&gt;Netty · 本地 Channel → 桌面 A&lt;/b&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="7">
+          <mxGeometry as="geometry" x="60" y="950" width="480" height="80" />
+        </mxCell>
+        <mxCell id="16" value="&lt;b&gt;Netty · 本地 Channel → 桌面 B&lt;/b&gt;" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="8">
+          <mxGeometry as="geometry" x="60" y="950" width="480" height="80" />
+        </mxCell>
+        <mxCell id="17" value="RabbitMQ · 两级消息分发" style="swimlane;startSize=50;horizontal=1;container=1;collapsible=0;pointerEvents=0;rounded=1;arcSize=8;html=1;whiteSpace=wrap;fillColor=#fff2cc;swimlaneFillColor=#ffffff;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=26;fontStyle=1;align=left;spacingLeft=20;align=center;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="820" y="390" width="760" height="1070" />
+        </mxCell>
+        <mxCell id="18" value="&lt;b&gt;im.message.x&lt;/b&gt; · topic exchange" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=24;spacing=10;" vertex="1" parent="17">
+          <mxGeometry as="geometry" x="60" y="100" width="640" height="90" />
+        </mxCell>
+        <mxCell id="19" value="&lt;b&gt;im.dispatch.q&lt;/b&gt;&lt;br&gt;durable quorum · 业务任务" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=24;spacing=10;" vertex="1" parent="17">
+          <mxGeometry as="geometry" x="150" y="270" width="460" height="110" />
+        </mxCell>
+        <mxCell id="20" value="&lt;b&gt;Retry / DLQ&lt;/b&gt; · durable quorum&lt;br&gt;有上限重试 → DLQ" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="17">
+          <mxGeometry as="geometry" x="150" y="460" width="460" height="100" />
+        </mxCell>
+        <mxCell id="21" value="&lt;b&gt;im.gateway.x&lt;/b&gt; · direct exchange&lt;br&gt;按 gatewayRoute 定向投递" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=24;spacing=10;" vertex="1" parent="17">
+          <mxGeometry as="geometry" x="60" y="660" width="640" height="100" />
+        </mxCell>
+        <mxCell id="22" value="&lt;b&gt;A 在线队列&lt;/b&gt;&lt;br&gt;broker 生成名称&lt;br&gt;classic · exclusive&lt;br&gt;auto-delete" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=21;spacing=10;" vertex="1" parent="17">
+          <mxGeometry as="geometry" x="40" y="850" width="310" height="150" />
+        </mxCell>
+        <mxCell id="23" value="&lt;b&gt;B 在线队列&lt;/b&gt;&lt;br&gt;broker 生成名称&lt;br&gt;classic · exclusive&lt;br&gt;auto-delete" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=21;spacing=10;" vertex="1" parent="17">
+          <mxGeometry as="geometry" x="410" y="850" width="310" height="150" />
+        </mxCell>
+        <mxCell id="24" value="共享基础设施" style="swimlane;startSize=50;horizontal=1;container=1;collapsible=0;pointerEvents=0;rounded=1;arcSize=8;html=1;whiteSpace=wrap;fillColor=#f5f5f5;swimlaneFillColor=#ffffff;strokeColor=#929ca8;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=25;fontStyle=1;align=left;spacingLeft=20;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="80" y="1550" width="2240" height="210" />
+        </mxCell>
+        <mxCell id="25" value="&lt;b&gt;MySQL · 唯一事实来源&lt;/b&gt;&lt;br&gt;用户 / 好友 / 群成员 / 会话 / message / outbox / 游标" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;shape=cylinder3;boundedLbl=1;backgroundOutline=1;size=15;" vertex="1" parent="24">
+          <mxGeometry as="geometry" x="120" y="80" width="850" height="100" />
+        </mxCell>
+        <mxCell id="26" value="&lt;b&gt;Redis · 票据 / TTL / 在线设备路由&lt;/b&gt;&lt;br&gt;userId + deviceId → nodeId + sessionId + gatewayRoute" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=23;spacing=10;" vertex="1" parent="24">
+          <mxGeometry as="geometry" x="1270" y="80" width="850" height="100" />
+        </mxCell>
+        <mxCell id="27" value="接入" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="4" target="6">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="0" y="0" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="28" value="接入" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=2;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="5" target="6">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="0" y="0" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="29" value="A 连接" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=2;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.3;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="6" target="7">
+          <mxGeometry as="geometry" x="0.4" relative="1">
+            <mxPoint as="offset" x="0" y="0" />
+            <Array as="points">
+              <mxPoint x="1090" y="340" />
+              <mxPoint x="260" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="30" value="B 连接" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d79b00;strokeWidth=2;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.7;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="6" target="8">
+          <mxGeometry as="geometry" x="0.4" relative="1">
+            <mxPoint as="offset" x="0" y="0" />
+            <Array as="points">
+              <mxPoint x="1310" y="340" />
+              <mxPoint x="2140" y="340" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="31" value="发布 outbox 任务" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=1;exitY=0.25;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="9" target="18">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="0" y="-20" />
+            <Array as="points">
+              <mxPoint x="750" y="537.5" />
+              <mxPoint x="750" y="535" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="32" value="发布 outbox 任务" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=0;exitY=0.25;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="10" target="18">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="0" y="-20" />
+            <Array as="points">
+              <mxPoint x="1650" y="537.5" />
+              <mxPoint x="1650" y="535" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="33" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="18" target="19">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="0" y="0" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="34" value="竞争消费" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.3;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="19" target="11">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="-30" y="0" />
+            <Array as="points">
+              <mxPoint x="730" y="715" />
+              <mxPoint x="730" y="855" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="35" value="竞争消费" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.3;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="19" target="12">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="30" y="0" />
+            <Array as="points">
+              <mxPoint x="1670" y="715" />
+              <mxPoint x="1670" y="855" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="36" value="失败重试策略" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;dashed=1;dashPattern=6 4;" edge="1" parent="1" source="19" target="20">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="100" y="0" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="37" value="在线节点路由" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=1;exitY=0.8;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="11" target="21">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="-20" y="0" />
+            <Array as="points">
+              <mxPoint x="780" y="930" />
+              <mxPoint x="780" y="1100" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="38" value="在线节点路由" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=0;exitY=0.8;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="12" target="21">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="20" y="0" />
+            <Array as="points">
+              <mxPoint x="1620" y="930" />
+              <mxPoint x="1620" y="1100" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="39" value="gatewayRoute A" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=0.25;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="21" target="22">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="-95" y="0" />
+            <Array as="points">
+              <mxPoint x="1040" y="1190" />
+              <mxPoint x="1015" y="1190" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="40" value="gatewayRoute B" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=0.75;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="21" target="23">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="95" y="0" />
+            <Array as="points">
+              <mxPoint x="1360" y="1190" />
+              <mxPoint x="1385" y="1190" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="41" value="本节点消费" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=1;entryY=0.7;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="22" target="13">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="-20" y="0" />
+            <Array as="points">
+              <mxPoint x="740" y="1315" />
+              <mxPoint x="740" y="1227" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="42" value="本节点消费" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#d6b656;strokeWidth=2;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.7;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="23" target="14">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="20" y="0" />
+            <Array as="points">
+              <mxPoint x="1660" y="1315" />
+              <mxPoint x="1660" y="1227" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="43" value="本地推送" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="13" target="15">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="0" y="0" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="44" value="本地推送" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#6c8ebf;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="14" target="16">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="0" y="0" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="45" value="共享持久化 / 路由" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#929ca8;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.15;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="7" target="24">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="120" y="0" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="46" value="共享持久化 / 路由" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;endFill=1;strokeColor=#929ca8;strokeWidth=2;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.85;entryY=0;entryDx=0;entryDy=0;fontFamily=Helvetica;fontSize=17;fontColor=#334155;labelBackgroundColor=#ffffff;spacing=5;" edge="1" parent="1" source="8" target="24">
+          <mxGeometry as="geometry" x="0" relative="1">
+            <mxPoint as="offset" x="-120" y="0" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="47" value="&lt;b&gt;所有发布：publisher confirm + mandatory return；所有消费：manual ACK；均不等于设备已读。&lt;/b&gt;&lt;br&gt;节点在线队列临时、独占；消费者连接重建时更新 gatewayRoute。节点消失可能丢在线提示，MySQL 游标补拉兜底。" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=24;spacing=10;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="80" y="1810" width="2240" height="110" />
+        </mxCell>
+        <mxCell id="48" value="图例" style="swimlane;startSize=50;horizontal=1;container=1;collapsible=0;pointerEvents=0;rounded=1;arcSize=8;html=1;whiteSpace=wrap;fillColor=#f5f5f5;swimlaneFillColor=#ffffff;strokeColor=#929ca8;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=16;fontStyle=1;align=left;spacingLeft=20;startSize=0;fillColor=#ffffff;swimlaneFillColor=#ffffff;strokeColor=#d8dee8;" vertex="1" parent="1">
+          <mxGeometry as="geometry" x="90" y="1960" width="2240" height="80" />
+        </mxCell>
+        <mxCell id="49" value="颜色含义" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#203046;" vertex="1" parent="48">
+          <mxGeometry as="geometry" x="20" y="20" width="100" height="30" />
+        </mxCell>
+        <mxCell id="50" value="" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=20;spacing=10;rounded=0;" vertex="1" parent="48">
+          <mxGeometry as="geometry" x="140" y="30" width="30" height="20" />
+        </mxCell>
+        <mxCell id="51" value="接入 / 本地连接" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#203046;" vertex="1" parent="48">
+          <mxGeometry as="geometry" x="180" y="20" width="190" height="40" />
+        </mxCell>
+        <mxCell id="52" value="" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=20;spacing=10;rounded=0;" vertex="1" parent="48">
+          <mxGeometry as="geometry" x="370" y="30" width="30" height="20" />
+        </mxCell>
+        <mxCell id="53" value="客户端 / 业务" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#203046;" vertex="1" parent="48">
+          <mxGeometry as="geometry" x="410" y="20" width="190" height="40" />
+        </mxCell>
+        <mxCell id="54" value="" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=20;spacing=10;rounded=0;" vertex="1" parent="48">
+          <mxGeometry as="geometry" x="600" y="30" width="30" height="20" />
+        </mxCell>
+        <mxCell id="55" value="持久化事实" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#203046;" vertex="1" parent="48">
+          <mxGeometry as="geometry" x="640" y="20" width="190" height="40" />
+        </mxCell>
+        <mxCell id="56" value="" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=20;spacing=10;rounded=0;" vertex="1" parent="48">
+          <mxGeometry as="geometry" x="830" y="30" width="30" height="20" />
+        </mxCell>
+        <mxCell id="57" value="会话路由 / 票据" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#203046;" vertex="1" parent="48">
+          <mxGeometry as="geometry" x="870" y="20" width="190" height="40" />
+        </mxCell>
+        <mxCell id="58" value="" style="rounded=1;arcSize=12;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=1.5;fontColor=#203046;fontFamily=Helvetica;fontSize=20;spacing=10;rounded=0;" vertex="1" parent="48">
+          <mxGeometry as="geometry" x="1060" y="30" width="30" height="20" />
+        </mxCell>
+        <mxCell id="59" value="消息队列 / 约束" style="text;html=1;whiteSpace=wrap;fillColor=none;strokeColor=none;align=left;verticalAlign=middle;fontFamily=Helvetica;fontSize=16;fontColor=#203046;" vertex="1" parent="48">
+          <mxGeometry as="geometry" x="1100" y="20" width="190" height="40" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
