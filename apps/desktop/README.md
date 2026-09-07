@@ -14,6 +14,22 @@ Kotlin/JVM 21 + Compose Desktop 桌面客户端。已接入中文注册/登录�
 ./gradlew packageDistributionForCurrentOS
 ```
 
+### macOS / vfox 提示找不到 Java 21
+
+2026-09-08 本机排查发现：JDK 根目录存在 `bin/java`，但同时残留了空的 `Contents/Home`。Gradle 9.5 在 macOS 上优先选择后者，导致 Java 可以运行而工具链仍提示找不到可执行文件。这种情况不是缺少 Java 21，也不需要修改项目 toolchain 或自动下载配置。
+
+检查 `"$JAVA_HOME/bin/java" -version`，并确认报错路径中的 `Contents/Home` 是否为空。本机已将该空目录改名保留为 `Contents/Home.empty-before-koko-chat-fix`，未修改 JDK 文件或 shell 配置；不要对正常 macOS JDK 中有内容的 `Contents/Home` 执行这一操作。
+
+本机可使用 vfox 的当前 JDK 路径启动（其他机器应使用自己的 Java 21 路径）：
+
+```sh
+export JAVA_HOME="$HOME/.vfox/sdks/java"
+./gradlew --no-daemon javaToolchains
+./gradlew run
+```
+
+如果 vfox 当前选中的不是 Java 21，先切换到已安装的 Java 21。工具链结果应包含 Java 21 且路径有效。Gradle 的运行 JVM 与编译工具链概念见 [官方工具链说明](https://docs.gradle.org/9.5.0/userguide/toolchains.html)。
+
 构建默认使用正常的 Gradle 用户缓存；如需临时隔离缓存，可为命令设置 `GRADLE_USER_HOME=/private/tmp/koko-chat-build/gradle`。不需要全局安装 Gradle。
 
 默认 HTTP 地址为 `http://127.0.0.1:8080`，IM 地址为 `ws://127.0.0.1:8081/im`。检查服务依次请求 `GET /api/system/info` 与 `GET /actuator/health`，要求系统名为 `koko-chat`。远程部署应使用 HTTPS/WSS。
