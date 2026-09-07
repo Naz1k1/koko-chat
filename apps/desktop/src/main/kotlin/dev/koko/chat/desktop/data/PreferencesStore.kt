@@ -43,6 +43,13 @@ class PreferencesStore(private val file: Path, private val dispatcher: Coroutine
         }
     }
 
+    /** 首次启动生成设备 UUID；INSERT OR IGNORE 避免另一实例覆盖同一数据目录的设备身份。 */
+    suspend fun deviceId(): String = withContext(dispatcher) {
+        val queries = database().preferencesQueries
+        queries.putIfAbsent("device_id", java.util.UUID.randomUUID().toString())
+        queries.selectValue("device_id").executeAsOne()
+    }
+
     /** 由应用退出流程调用；应先停止所有使用此存储的任务。 */
     suspend fun close() = withContext(dispatcher) {
         driver?.close()

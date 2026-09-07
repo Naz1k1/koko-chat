@@ -34,12 +34,15 @@ class DesktopFoundationTest {
         val file = temporaryFolder.root.toPath().resolve("settings/preferences.db")
         val settings = ServiceSettings("https://chat.example.test", "wss://chat.example.test/im")
         val first = PreferencesStore(file, dispatcher)
+        var deviceId = ""
         try {
             assertEquals(ServiceSettings(), first.load())
             first.save(settings)
+            deviceId = first.deviceId()
+            assertEquals(deviceId, first.deviceId())
         } finally { first.close() }
         val reopened = PreferencesStore(file, dispatcher)
-        try { assertEquals(settings, reopened.load()) }
+        try { assertEquals(settings, reopened.load()); assertEquals(deviceId, reopened.deviceId()) }
         finally { reopened.close(); dispatcher.close() }
     }
 

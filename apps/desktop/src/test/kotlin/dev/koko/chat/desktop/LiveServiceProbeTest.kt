@@ -20,7 +20,7 @@ class LiveServiceProbeTest {
             try {
                 val result = KtorServiceProbe(client).check(ServiceSettings(apiBaseUrl = requireNotNull(apiBase)))
                 assertEquals("koko-chat", result.system.name)
-                assertEquals("skeleton", result.system.stage)
+                assertEquals(System.getenv("KOKO_CHAT_TEST_STAGE") ?: "skeleton", result.system.stage)
                 assertEquals("UP", result.health.status)
             } finally {
                 client.close()

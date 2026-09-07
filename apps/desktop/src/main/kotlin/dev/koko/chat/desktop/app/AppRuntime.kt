@@ -1,6 +1,8 @@
 package dev.koko.chat.desktop.app
 
 import dev.koko.chat.desktop.data.PreferencesStore
+import dev.koko.chat.desktop.network.KtorAuthApi
+import dev.koko.chat.desktop.network.KtorImConnector
 import dev.koko.chat.desktop.network.KtorServiceProbe
 import dev.koko.chat.desktop.network.createHttpClient
 import dev.koko.chat.desktop.platform.AppPaths
@@ -23,8 +25,8 @@ class AppRuntime {
     }.asCoroutineDispatcher()
     private val store = PreferencesStore(AppPaths.preferencesFile(), databaseDispatcher)
     private val client = createHttpClient()
-    val sessions = SessionManager(scope)
-    val screenModel = DesktopScreenModel(scope, store, KtorServiceProbe(client))
+    val sessions = SessionManager(scope, KtorAuthApi(client), KtorImConnector(client), store::deviceId)
+    val screenModel = DesktopScreenModel(scope, store, KtorServiceProbe(client), sessions)
 
     /** 先等待页面任务退出，再关闭客户端和数据库；finally 保证异常时仍继续释放资源。 */
     suspend fun closeResources() {

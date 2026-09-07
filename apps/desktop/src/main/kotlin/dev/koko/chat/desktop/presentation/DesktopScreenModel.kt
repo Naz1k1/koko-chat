@@ -1,5 +1,7 @@
 package dev.koko.chat.desktop.presentation
 
+import dev.koko.chat.desktop.session.SessionManager
+import dev.koko.chat.desktop.session.SessionUiState
 import dev.koko.chat.desktop.config.ServiceSettings
 import dev.koko.chat.desktop.data.PreferencesStore
 import dev.koko.chat.desktop.network.ProbeResult
@@ -38,12 +40,19 @@ class DesktopScreenModel(
     parentScope: CoroutineScope,
     private val store: PreferencesStore,
     private val probe: ServiceProbe,
+    private val sessions: SessionManager? = null,
 ) {
     private val job = SupervisorJob(parentScope.coroutineContext[Job])
     private val scope = CoroutineScope(parentScope.coroutineContext + job)
     private val mutableState = MutableStateFlow(DesktopUiState())
     val state: StateFlow<DesktopUiState> = mutableState.asStateFlow()
     private var probeJob: Job? = null
+    val sessionState: StateFlow<SessionUiState> = sessions?.state ?: MutableStateFlow(SessionUiState())
+    fun signIn(account: String, password: String, nickname: String?, register: Boolean) {
+        if (!state.value.initialized || state.value.settingsSaving) return
+        sessions?.signIn(state.value.settings, account, password, nickname, register)
+    }
+    fun logout() { scope.launch { sessions?.logout() } }
 
     init {
         scope.launch {
@@ -76,6 +85,7 @@ class DesktopScreenModel(
             try {
                 // 先取消并等待旧地址的探针结束，防止迟到结果覆盖新地址的页面状态。
                 probeJob?.cancelAndJoin()
+                sessions?.logout()
                 store.save(settings)
                 mutableState.update {
                     it.copy(settings = settings, settingsOpen = false, settingsSaving = false,

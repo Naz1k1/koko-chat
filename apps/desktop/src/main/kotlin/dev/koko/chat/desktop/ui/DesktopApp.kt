@@ -1,5 +1,10 @@
 package dev.koko.chat.desktop.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import dev.koko.chat.desktop.session.SessionState
+import dev.koko.chat.desktop.session.SessionUiState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -28,66 +33,101 @@ private val Line = Color(0xFFE5EAE5)
 @Composable
 fun DesktopApp(model: DesktopScreenModel, closing: Boolean) {
     val state by model.state.collectAsState()
+    val session by model.sessionState.collectAsState()
     MaterialTheme(colorScheme = lightColorScheme(primary = Accent, background = Canvas, surface = Color.White)) {
-        Row(Modifier.fillMaxSize().background(Canvas)) {
-            Column(Modifier.width(76.dp).fillMaxHeight().background(Ink).padding(vertical = 26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Box(Modifier.size(42.dp).background(Color(0xFFDAF2D3), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
-                    Text("k", color = Ink, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val compact = maxHeight < 700.dp
+            Row(Modifier.fillMaxSize().background(Canvas)) {
+                Column(Modifier.width(76.dp).fillMaxHeight().background(Ink).padding(vertical = 26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Box(Modifier.size(42.dp).background(Color(0xFFDAF2D3), RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) {
+                        Text("k", color = Ink, fontSize = 30.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.height(44.dp))
+                    Text("会话", color = Color.White, fontSize = 13.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text("桌面端", color = Color(0xFFB2C7BE), fontSize = 11.sp)
                 }
-                Spacer(Modifier.height(44.dp))
-                Text("会话", color = Color.White, fontSize = 13.sp)
-                Spacer(Modifier.weight(1f))
-                Text("桌面端", color = Color(0xFFB2C7BE), fontSize = 11.sp)
-            }
-            Column(Modifier.width(276.dp).fillMaxHeight().background(Color.White).padding(24.dp)) {
-                Text("koko-chat", color = Ink, fontSize = 23.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(6.dp))
-                Text("让对话，慢慢发生。", color = Muted, fontSize = 12.sp)
-                Spacer(Modifier.height(32.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("会话", color = Ink, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Text("0", color = Muted, fontSize = 12.sp)
+                Column(Modifier.width(276.dp).fillMaxHeight().background(Color.White).padding(24.dp)) {
+                    Text("koko-chat", color = Ink, fontSize = 23.sp, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.height(6.dp))
+                    Text("让对话，慢慢发生。", color = Muted, fontSize = 12.sp)
+                    Spacer(Modifier.height(32.dp))
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("会话", color = Ink, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text("0", color = Muted, fontSize = 12.sp)
+                    }
+                    Spacer(Modifier.height(18.dp))
+                    HorizontalDivider(color = Line)
+                    Spacer(Modifier.height(58.dp))
+                    Text("这里还没有会话", color = Ink, fontSize = 14.sp)
+                    Spacer(Modifier.height(8.dp))
+                    Text("登录后可保持聊天连接。\n联系人和消息收发将在下一步接入。", color = Muted, fontSize = 12.sp, lineHeight = 21.sp)
+                    Spacer(Modifier.weight(1f))
+                    HorizontalDivider(color = Line)
+                    Spacer(Modifier.height(16.dp))
+                    Text(state.storageMessage, color = if (state.storageReady) Muted else Color(0xFF9E7031), fontSize = 11.sp)
+                    Text("仅保存非敏感服务设置", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedButton(onClick = model::openSettings, enabled = state.initialized && !closing, modifier = Modifier.fillMaxWidth()) { Text("服务设置") }
                 }
-                Spacer(Modifier.height(18.dp))
-                HorizontalDivider(color = Line)
-                Spacer(Modifier.height(58.dp))
-                Text("这里还没有会话", color = Ink, fontSize = 14.sp)
-                Spacer(Modifier.height(8.dp))
-                Text("账号与聊天功能将在后续接入。\n当前没有加载任何聊天数据。", color = Muted, fontSize = 12.sp, lineHeight = 21.sp)
-                Spacer(Modifier.weight(1f))
-                HorizontalDivider(color = Line)
-                Spacer(Modifier.height(16.dp))
-                Text(state.storageMessage, color = if (state.storageReady) Muted else Color(0xFF9E7031), fontSize = 11.sp)
-                Text("仅保存非敏感服务设置", color = Muted, fontSize = 10.sp, modifier = Modifier.padding(top = 4.dp))
-                Spacer(Modifier.height(12.dp))
-                OutlinedButton(onClick = model::openSettings, enabled = state.initialized && !closing, modifier = Modifier.fillMaxWidth()) { Text("服务设置") }
-            }
-            Box(Modifier.width(1.dp).fillMaxHeight().background(Line))
-            Column(Modifier.weight(1f).fillMaxHeight().padding(32.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("工作空间", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    Text("工程骨架 · 0.1", color = Accent, fontSize = 11.sp, modifier = Modifier.background(Color(0xFFE6EEE7), RoundedCornerShape(20.dp)).padding(horizontal = 12.dp, vertical = 7.dp))
-                }
-                Spacer(Modifier.height(25.dp))
-                ServiceStatus(state, closing, model::checkService)
-                Column(Modifier.weight(1f).fillMaxWidth(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Box(Modifier.size(82.dp).background(Color(0xFFE4EDE4), RoundedCornerShape(28.dp)), contentAlignment = Alignment.Center) {
-                        Text("聊", fontSize = 30.sp, color = Accent, fontWeight = FontWeight.Light)
+                Box(Modifier.width(1.dp).fillMaxHeight().background(Line))
+                Column(Modifier.weight(1f).fillMaxHeight().padding(32.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("工作空间", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        Text("账号认证 · 0.1", color = Accent, fontSize = 11.sp, modifier = Modifier.background(Color(0xFFE6EEE7), RoundedCornerShape(20.dp)).padding(horizontal = 12.dp, vertical = 7.dp))
                     }
                     Spacer(Modifier.height(25.dp))
-                    Text("对话，从这里开始", color = Ink, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-                    Spacer(Modifier.height(12.dp))
-                    Text("先检查服务，让桌面端与后端见个面。\n登录、联系人与消息收发尚未接入。", color = Muted, textAlign = TextAlign.Center, fontSize = 13.sp, lineHeight = 23.sp)
-                    Spacer(Modifier.height(25.dp))
-                    Text("未登录 · IM 未连接", color = Muted, fontSize = 12.sp)
-                }
-                Row(Modifier.fillMaxWidth().border(1.dp, Line, RoundedCornerShape(12.dp)).padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (closing) "正在关闭网络与本地存储…" else "消息输入区将在聊天功能接入后开放", color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
-                    Text("发送", color = Color(0xFFABB4AD), fontSize = 12.sp)
+                    ServiceStatus(state, closing, model::checkService)
+                    Box(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(vertical = 24.dp), contentAlignment = Alignment.Center) {
+                        AccountPanel(session, state.initialized && !state.settingsSaving && !closing, compact, model)
+                    }
+                    if (!compact) Row(Modifier.fillMaxWidth().border(1.dp, Line, RoundedCornerShape(12.dp)).padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (closing) "正在关闭网络与本地存储…" else "消息输入区将在聊天功能接入后开放", color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        Text("发送", color = Color(0xFFABB4AD), fontSize = 12.sp)
+                    }
                 }
             }
+            if (state.settingsOpen) SettingsDialog(state, model)
         }
-        if (state.settingsOpen) SettingsDialog(state, model)
+    }
+}
+
+/** 表单只持有本次输入；提交后立即清空密码，登录与连接状态完全由 SessionManager 驱动。 */
+@Composable
+private fun AccountPanel(session: SessionUiState, enabled: Boolean, compact: Boolean, model: DesktopScreenModel) {
+    var registering by remember { mutableStateOf(false) }
+    var account by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var nickname by remember { mutableStateOf("") }
+    Column(Modifier.widthIn(max = 400.dp).fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp)) {
+        if (session.user == null && session.phase != SessionState.SIGNING_OUT) {
+            Text(if (registering) "创建你的账号" else "欢迎回来", color = Ink, fontSize = 25.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (registering) "注册成功后自动登录并连接聊天服务。" else "登录 koko-chat，连接你的桌面对话。", color = Muted, fontSize = 12.sp)
+            OutlinedTextField(account, { account = it }, label = { Text("账号（字母、数字或下划线）") }, singleLine = true,
+                enabled = enabled && !session.busy, modifier = Modifier.fillMaxWidth())
+            if (registering) OutlinedTextField(nickname, { nickname = it }, label = { Text("昵称") }, singleLine = true,
+                enabled = enabled && !session.busy, modifier = Modifier.fillMaxWidth())
+            OutlinedTextField(password, { password = it }, label = { Text("密码（8–128 字符）") }, singleLine = true,
+                visualTransformation = PasswordVisualTransformation(), enabled = enabled && !session.busy, modifier = Modifier.fillMaxWidth())
+            Text(session.message, color = Muted, fontSize = 12.sp, lineHeight = 19.sp)
+            Button(onClick = {
+                val submitted = password
+                password = ""
+                model.signIn(account.trim(), submitted, nickname, registering)
+            }, enabled = enabled && !session.busy && account.isNotBlank() && password.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
+                Text(if (session.busy) "正在处理…" else if (registering) "注册并登录" else "登录")
+            }
+            TextButton(onClick = { registering = !registering; password = "" }, enabled = enabled && !session.busy, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Text(if (registering) "已有账号？去登录" else "还没有账号？创建账号")
+            }
+        } else {
+            Text(session.user?.nickname ?: "正在退出", color = Ink, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+            session.user?.let { Text("@${it.account}", color = Muted, fontSize = 13.sp) }
+            if (session.phase == SessionState.CONNECTING || session.phase == SessionState.RECONNECTING) LinearProgressIndicator(Modifier.fillMaxWidth())
+            Text(session.message, color = if (session.phase == SessionState.ONLINE) Accent else Muted, fontSize = 14.sp, lineHeight = 22.sp)
+            Text("联系人和消息功能正在准备中。", color = Muted, fontSize = 12.sp)
+            OutlinedButton(onClick = model::logout, enabled = enabled && !session.busy) { Text("退出登录") }
+        }
     }
 }
 
@@ -126,7 +166,7 @@ private fun SettingsDialog(state: DesktopUiState, model: DesktopScreenModel) {
                 Text("默认地址用于本机开发。远程部署使用 HTTPS / WSS。", fontSize = 12.sp, color = Muted)
                 OutlinedTextField(api, { api = it }, label = { Text("HTTP 服务地址") }, singleLine = true, enabled = !state.settingsSaving, modifier = Modifier.fillMaxWidth())
                 OutlinedTextField(im, { im = it }, label = { Text("IM WebSocket 地址") }, singleLine = true, enabled = !state.settingsSaving, modifier = Modifier.fillMaxWidth())
-                Text("当前仅检查 HTTP 信息与健康状态；IM 地址预留给后续登录与连接功能。", fontSize = 12.sp, color = Muted)
+                Text("保存服务地址会先退出当前账号并关闭聊天连接。", fontSize = 12.sp, color = Muted)
                 state.settingsError?.let { Text(it, color = MaterialTheme.colorScheme.error, fontSize = 12.sp) }
             }
         },

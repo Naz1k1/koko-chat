@@ -11,3 +11,7 @@ SELECT value FROM app_preferences WHERE key = ?;
 -- 每个设置键只保留一个值；两个服务地址由调用方放在同一事务内更新。
 putValue:
 INSERT OR REPLACE INTO app_preferences(key, value) VALUES (?, ?);
+
+-- 设备编号创建后保持稳定，账号退出时不删除设备身份。
+putIfAbsent:
+INSERT OR IGNORE INTO app_preferences(key, value) VALUES (?, ?);
