@@ -1,6 +1,6 @@
 # 文本聊天协议（单聊与群聊已实现）
 
-适用于 `local` 配置，当前系统信息 `stage=groups`（包含上一阶段单聊能力）。HTTP 使用访问令牌；WebSocket 先按 [认证契约](auth.md) 取得 `AUTH_OK`。所有 ID、seq 均为十进制字符串，客户端按整数比较；当前范围为 Java 正数 Long。时间为 UTC ISO-8601。
+适用于 `local` 配置，当前系统信息 `stage=read-receipts`（包含上一阶段单聊能力）。HTTP 使用访问令牌；WebSocket 先按 [认证契约](auth.md) 取得 `AUTH_OK`。所有 ID、seq 均为十进制字符串，客户端按整数比较；当前范围为 Java 正数 Long。时间为 UTC ISO-8601。
 
 ## 会话与补拉
 
@@ -14,7 +14,7 @@
 会话对象：
 
 ```json
-{"id":"10","peerId":"2","account":"bob","nickname":"小波","membershipEpoch":"b6a403c9-334c-4f7b-af1c-019bcd8ca15c","visibleFromSeq":"1","latestSeq":"20","type":"DIRECT","ownerId":null}
+{"id":"10","peerId":"2","account":"bob","nickname":"小波","membershipEpoch":"b6a403c9-334c-4f7b-af1c-019bcd8ca15c","visibleFromSeq":"1","latestSeq":"20","type":"DIRECT","ownerId":null,"lastReadSeq":"15","unreadCount":"3","peerLastReadSeq":"18"}
 ```
 
 会话列表响应为 `{"conversations":[...],"nextCursor":"10","hasMore":false}`。ID 为随机正 Long，分页期间新建且 ID 小于游标的会话可能到下轮全量目录同步才出现；目录不是快照令牌。
@@ -52,7 +52,29 @@
 {"v":1,"type":"RECEIVED_ACK","requestId":"rpc-2","conversationId":"10","membershipEpoch":"接收方自己的成员周期","receivedSeq":"1"}
 ```
 
-服务端返回 `{"v":1,"type":"RECEIVED_ACK_OK","requestId":"rpc-2","serverTime":"..."}`，设备游标以 GREATEST 单调更新，不能超过服务端 latestSeq。READ 尚未实现。接收方离线时，历史消息仍在 MySQL，不依赖 Redis Pub/Sub 或网关临时队列保存；重新登录和周期补拉使用同一历史接口。
+服务端返回 `{"v":1,"type":"RECEIVED_ACK_OK","requestId":"rpc-2","serverTime":"..."}`，设备游标以 GREATEST 单调更新，不能超过服务端 latestSeq。设备确认不推进用户已读。接收方离线时，历史消息仍在 MySQL，不依赖 Redis Pub/Sub 或网关临时队列保存；重新登录和周期补拉使用同一历史接口。
+
+## 用户已读与未读计数
+
+```json
+{"v":1,"type":"READ","requestId":"read-1","conversationId":"10","membershipEpoch":"b6a403c9-334c-4f7b-af1c-019bcd8ca15c","readSeq":"20"}
+```
+
+服务端返回 `{"v":1,"type":"READ_ACK","requestId":"read-1","serverTime":"...","conversation":{...}}`。conversation 与 HTTP 会话摘要相同，包含：
+
+| 字段 | 语义 |
+| --- | --- |
+| lastReadSeq | 当前用户、会话、成员周期共享的最大已读位置，非负 Long 字符串 |
+| unreadCount | 当前可见范围内 seq 大于 lastReadSeq 且 senderId 不等于当前用户的消息条数，非负 Long 字符串 |
+| peerLastReadSeq | 单聊对方的已读位置；群聊为 null，不表示所有成员已读 |
+
+READ 必须在 `[joinSeq-1, min(latestSeq, 当前设备的 receivedSeq)]` 范围内；设备尚无确认记录时上界为 joinSeq-1。身份从已认证连接取得，不能代替其他用户阅读。与发送和成员变更共用会话锁，使用 GREATEST 推进。同周期的重复或较小有效进度只返回当前摘要，不倒退也不重复发通知。其他设备已读到更远位置时，READ_ACK 的 lastReadSeq 可以大于本次请求；这不能推进本机接收游标。
+
+成功提交后，服务端异步路由 RabbitMQ 提示到阅读者全部在线设备，单聊另通知对方在线设备。接入节点复核登录身份和成员周期，查询当前摘要，再推送 `{"v":1,"type":"READ_UPDATE","conversation":{...}}`。群聊不向其他成员广播读位置。
+
+READ_UPDATE 是可丢失的状态提示，复用有界临时网关队列，不写 message_outbox、不走聊天消息的重试/死信责任链。READ_ACK 的成功只取决于 MySQL 提交；MQ 不可用或提示丢失时，各端每 10 秒从 HTTP 快照恢复。快照和待上报阅读位置按成员周期单调合并，旧周期通知不得恢复已退出会话。
+
+客户端只在有焦点且未被其他面板遮挡的聊天区，根据实际可见消息保存“读到此处”的位置；滚动经过不会立即上报。意图持久化后再发送，网络异常保留原位置重试。未读计数不能用 latestSeq-lastReadSeq 代替，因为这会把自己发送的消息计算在内。
 
 ## 错误与客户端行为
 
@@ -62,6 +84,7 @@
 | --- | --- |
 | UNAUTHENTICATED | 身份无效，重新登录或重新取得票据 |
 | USER_NOT_FOUND / SELF_CHAT | 检查对方账号 |
+| INVALID_READ | 阅读范围非法；先补齐本机消息并确认设备连续游标，不能越过本设备已接收位置 |
 | INVALID_MESSAGE | 修正参数，不自动生成新编号重发原错误 |
 | NOT_A_MEMBER / MEMBERSHIP_CHANGED | 禁止旧成员周期继续操作，重新同步 |
 | IDEMPOTENCY_CONFLICT | 停止自动重试，原编号不能绑定新内容 |

@@ -1,6 +1,6 @@
 # koko-chat 后端
 
-Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包，采用 Controller / Handler → Service → Mapper；已实现系统探针、注册登录、令牌会话与 Netty 票据认证、单聊持久化、历史分页、设备回执及 RabbitMQ 两级分发，以及好友申请/接受/拒绝与双向联系人关系。群管理支持创建、邀请好友、移除、退出和解散，消息通过统一会话与 MQ 链路分发。
+Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包，采用 Controller / Handler → Service → Mapper；已实现系统探针、注册登录、令牌会话与 Netty 票据认证、单聊持久化、历史分页、设备回执及 RabbitMQ 两级分发，以及好友申请/接受/拒绝与双向联系人关系。群管理支持创建、邀请好友、移除、退出和解散，消息通过统一会话与 MQ 链路分发。已读进度复用 conversation_member.last_read_seq，按用户/会话/成员周期共享，未读数排除自己发送的消息。
 
 ## 构建与默认启动
 
@@ -13,7 +13,7 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 
 也可执行 `java -jar target/koko-chat-server-0.1.0-SNAPSHOT.jar`。默认 `skeleton` profile 不创建 MySQL、Redis、RabbitMQ 客户端，因此无需启动中间件。
 
-- `GET http://127.0.0.1:8080/api/system/info`：`{name, version, stage, httpPort, imPort, imPath}`，`stage` 在默认模式为 `skeleton`，`local` 为 `groups`。
+- `GET http://127.0.0.1:8080/api/system/info`：`{name, version, stage, httpPort, imPort, imPath}`，`stage` 在默认模式为 `skeleton`，`local` 为 `read-receipts`。
 - `GET http://127.0.0.1:8080/actuator/health`：进程及 Netty 正常时返回 `{"status":"UP"}`。
 - `ws://127.0.0.1:8081/im`：WebSocket 握手、控制帧 PING/PONG、JSON v1 应用心跳。TLS 由后续部署入口终止，本地骨架使用 HTTP / WS。
 
@@ -21,7 +21,7 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 
 响应：`{"v":1,"type":"PONG","requestId":"probe-1","serverTime":"UTC ISO-8601"}`。
 
-默认骨架模式的 `AUTH` 返回 `NOT_IMPLEMENTED`。`local` 模式使用一次性 Redis 票据，成功返回 `AUTH_OK`；未认证的消息命令返回 `UNAUTHENTICATED`，认证后支持 `SEND` / `SEND_ACK`、`MESSAGE` 和 `RECEIVED_ACK`；`READ` 尚未实现。单聊接口见 [聊天契约](../contracts/chat.md)。错误响应字段为 `v/type/requestId?/serverTime/code/message`。
+默认骨架模式的 `AUTH` 返回 `NOT_IMPLEMENTED`。`local` 模式使用一次性 Redis 票据，成功返回 `AUTH_OK`；未认证的消息命令返回 `UNAUTHENTICATED`，认证后支持 `SEND` / `SEND_ACK`、`MESSAGE` 和 `RECEIVED_ACK`，以及 `READ` / `READ_ACK` / `READ_UPDATE`。单聊接口见 [聊天契约](../contracts/chat.md)。错误响应字段为 `v/type/requestId?/serverTime/code/message`。
 
 单帧和完整聚合消息均限制为 16 KiB；只接收 JSON 文本。握手后未认证连接在 30 秒关闭，PING 不延长认证期限；读空闲 75 秒关闭。Netty EventLoop 仅做轻量协议解析；票据验证和会话有效性查询通过有界 `imBusinessExecutor` 执行，过载关闭 1013，防止阻塞 Netty 事件循环。
 
@@ -45,7 +45,7 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 | `RABBITMQ_HOST` / `RABBITMQ_PORT` | `127.0.0.1` / `5672` |
 | `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `koko` / 密码必须从环境变量提供 |
 
-`local` 启用数据源、Redis、RabbitMQ 和 Flyway；首次迁移创建账号、好友、会话、消息、游标与 Outbox 共 9 张业务表，详情见 [数据库文件与迁移说明](../docs/database.md)。认证 Mapper 已接入账号与登录会话，V2 增加访问令牌摘要；尚无聊天队列声明或消费者。RabbitMQ 已配置 correlated confirms、returns、mandatory 和 manual ACK，为后续实现预留。Actuator health 会反映 local 中间件连接状态；健康探针不代表 MQ 拓扑或聊天业务已经就绪。
+`local` 启用数据源、Redis、RabbitMQ 和 Flyway；首次迁移创建账号、好友、会话、消息、游标与 Outbox 共 9 张业务表，详情见 [数据库文件与迁移说明](../docs/database.md)。认证 Mapper 已接入账号与登录会话，V2 增加访问令牌摘要，V3 增加群操作去重表，当前共 10 张业务表。RabbitMQ 已声明持久分发、重试、死信与临时网关队列，配置 correlated confirms、returns、mandatory 和 manual ACK。Actuator health 会反映 local 中间件连接状态；健康探针不代表 MQ 拓扑或聊天业务已经就绪。
 
 版本依据：[Spring Boot 3.5 官方要求](https://docs.spring.io/spring-boot/3.5/system-requirements.html)、[MyBatis 官方兼容表](https://mybatis.org/spring-boot-starter/mybatis-spring-boot-autoconfigure/)。
 

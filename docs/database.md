@@ -1,6 +1,6 @@
 # 数据库文件与迁移说明
 
-数据库采用 MySQL 8.4、InnoDB、utf8mb4，首个 Flyway 版本建立 9 张业务表。SQL 中已包含中文表说明、字段说明、索引及约束。当前已实现认证、好友、文本单聊/群聊与 MQ 分发；好友申请和双向关系直接复用 V1 表，未改写已应用迁移。认证字段通过 V2 演进；V3 新增 group_command，当前共 10 张业务表。
+数据库采用 MySQL 8.4、InnoDB、utf8mb4，首个 Flyway 版本建立 9 张业务表。SQL 中已包含中文表说明、字段说明、索引及约束。当前已实现认证、好友、文本单聊/群聊、已读/未读与 MQ 分发；好友申请和双向关系直接复用 V1 表，未改写已应用迁移。认证字段通过 V2 演进；V3 新增 group_command，当前共 10 张业务表。
 
 ## 文件入口
 
@@ -45,7 +45,7 @@
 1. 创建单聊时，应用按数值排序双方 ID，生成 direct_key，并在同一事务写入两位成员。群人数上限、群主身份与成员角色一致性由持有会话行锁的 Service 校验。
 2. 新消息先在认证发送者范围内检查幂等，再在会话锁内校验当前发言权限和成员周期，更新 latest_seq、插入 message 与 message_outbox，提交后才返回 SEND_ACK。
 3. 好友关系的两个方向必须同事务创建/解除；处理申请时同时设置 status 与 handled_at。退出群时同时设置成员状态与 left_at。
-4. 已读和设备接收进度必须校验当前成员周期、可见起点及 latest_seq，并使用单调更新。SQL CHECK 只验证本行范围，不检查另一张表或阻止后续较小值覆盖。
+4. 已读和设备接收进度必须校验当前成员周期、可见起点及 latest_seq，并使用单调更新。READ 还须不超过当前设备 received_seq，读取共享已读进度不能推进本机接收游标。SQL CHECK 只验证本行范围，不检查另一张表或阻止后续较小值覆盖。
 5. 同一设备重新登录时，由认证事务撤销旧 auth_session，再创建新会话；索引不会自动判断凭证过期或执行会话替换。
 
 Outbox 初始为 PENDING。认领时切到 PUBLISHING，同时写入新的 lease_token 和 lease_until；MQ 发布在事务外进行。结果更新必须匹配 event_id、PUBLISHING 状态及本次 lease_token，避免过期发布者覆盖新认领结果。转回 PENDING 或完成 PUBLISHED 时清空租约；只有完成发布才填写 published_at。attempts 记录 Outbox 发布次数，与 MQ 消费事件中的 attempt 分开。
@@ -90,3 +90,9 @@ export KOKO_CHAT_MYSQL_TEST_USER=root
 `V2__add_access_tokens.sql` 为 `auth_session` 增加访问令牌摘要和到期时间，并通过生成列约束同用户同设备只能存在一个未撤销会话。旧会话的新增列允许为空，不能凭空获得访问权限，需重新登录。V1 保持不变。
 
 2026-09-07 已在本机 MySQL 8.4 实际执行 V1/V2，验证重复迁移无操作、消息幂等约束、外键、Outbox 状态及事务回滚；测试结束删除独立临时库。
+
+## 已读阶段的数据库演进
+
+MySQL 继续复用 V1 的 conversation_member.last_read_seq 与 device_cursor，无新增业务表或 Flyway 版本，V1–V3 均保持原样。会话摘要按 message(conversation_id,seq) 范围统计其他发送者的未读消息；当前采用精确 COUNT，尚未做大规模会话或积压消息下的性能测试。
+
+桌面消息库增加 [pending_read 建表定义](../apps/desktop/src/main/chatdb/dev/koko/chat/desktop/data/chat/ChatCache.sq) 和 [v1→v2 迁移](../apps/desktop/src/main/chatdb/dev/koko/chat/desktop/data/chat/1.sqm)，保存 conversation_id、epoch、read_seq，每个会话只保留同周期最大待确认位置。确认覆盖后删除，退群/移除/新周期清理；账号和服务文件隔离不变。迁移测试从含消息的真实 v1 SQLite 结构打开生产驱动，验证旧消息保留且新阅读意图可持久化。

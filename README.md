@@ -2,7 +2,7 @@
 
 桌面即时通信项目。客户端采用 **Kotlin + Compose Desktop**；服务端采用 **Java 21 + Spring Boot 3.5.x + Netty + RabbitMQ + MySQL + Redis**，按 Controller / Handler → Service → Mapper 常规分层组织。
 
-当前已完成账号认证、好友与文本单聊/群聊闭环：注册登录、令牌刷新、Netty 认证与心跳、好友申请与接受/拒绝、联系人列表、按准确账号建立单聊、建群与邀请/移除/退出/解散、消息与 Outbox 同事务保存、RabbitMQ 分发、设备接收回执、离线补拉，以及中文桌面聊天界面与账号独立的 SQLite 消息缓存。已读状态、未读计数和文件消息仍待实现。桌面端采用 MVVM + StateFlow、Ktor HTTPS/WSS、SQLDelight + SQLite，两端统一使用 JDK 21。
+当前已完成账号认证、好友与文本单聊/群聊闭环：注册登录、令牌刷新、Netty 认证与心跳、好友申请与接受/拒绝、联系人列表、按准确账号建立单聊、建群与邀请/移除/退出/解散、消息与 Outbox 同事务保存、RabbitMQ 分发、设备接收回执、离线补拉，以及中文桌面聊天界面与账号独立的 SQLite 消息缓存。现已支持用户已读回执、会话未读计数、跨设备读进度同步和断线补报；文件消息仍待实现。桌面端采用 MVVM + StateFlow、Ktor HTTPS/WSS、SQLDelight + SQLite，两端统一使用 JDK 21。
 
 ## 后端启动
 
@@ -57,6 +57,7 @@ cd apps/desktop
 - [好友阶段验收记录与界面](docs/contact-verification.md)
 - [群管理与成员周期协议](contracts/groups.md)
 - [群聊阶段验收记录与界面](docs/group-verification.md)
+- [已读回执、未读计数与多设备验收](docs/read-verification.md)
 - [数据库建表文件、字段与迁移方法](docs/database.md)
 - [架构设计、技术选型与实施顺序](docs/architecture.md)
 - [Kotlin 桌面端：模块、状态、同步与打包](docs/desktop.md)
@@ -67,7 +68,7 @@ cd apps/desktop
 
 旧 IM 项目只作为功能与实现经验参考；新文档、代码和配置均在本仓库维护。
 
-RabbitMQ 已参与单聊主链路：Outbox → 持久分发队列 → 当前网关队列 → Netty；发布使用 confirm + mandatory，失败经过 5/30/120 秒重试及死信处理。服务端保存确认、MQ 确认和设备接收分别定义，尚未实现用户已读。
+RabbitMQ 已参与单聊与群聊主链路：Outbox → 持久分发队列 → 当前网关队列 → Netty；发布使用 confirm + mandatory，失败经过 5/30/120 秒重试及死信处理。服务端保存确认、MQ 确认和设备接收分别定义，用户已读独立使用 READ / READ_ACK，在线变化经 RabbitMQ 提示，快照同步负责补齐。
 
 ## 本机认证、好友与聊天验收
 
@@ -79,4 +80,4 @@ RabbitMQ 已参与单聊主链路：Outbox → 持久分发队列 → 当前网�
 ./scripts/verify-desktop-auth.sh
 ```
 
-第三个脚本使用已构建的后端 JAR，在 18080/18081 启动临时服务，验证双客户端认证、好友申请与拒绝/接受、联系人聊天、三客户端群聊和成员隔离、真实 MQ 推送、确认丢失重试与离线补拉，然后退出并定向清理本次账号和聊天数据。原有服务端口被占用时会拒绝启动；可用 `KOKO_CHAT_VERIFY_HTTP_PORT` / `KOKO_CHAT_VERIFY_IM_PORT` 更换测试端口。
+第三个脚本使用已构建的后端 JAR，在 18080/18081 启动临时服务，验证双客户端认证、好友申请与拒绝/接受、联系人聊天、三客户端群聊和成员隔离、真实 MQ 推送、确认丢失重试与离线补拉、三客户端已读同步、READ_ACK 丢失重试和通知丢失后的快照恢复，然后退出并定向清理本次账号和聊天数据。原有服务端口被占用时会拒绝启动；可用 `KOKO_CHAT_VERIFY_HTTP_PORT` / `KOKO_CHAT_VERIFY_IM_PORT` 更换测试端口。

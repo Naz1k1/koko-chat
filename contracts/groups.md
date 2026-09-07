@@ -1,6 +1,6 @@
 # 群聊协议（已实现）
 
-`local` 配置的系统阶段为 `groups`，包含认证、好友、单聊及最多 200 人的小群。群管理使用 Bearer 访问令牌与 HTTP，文本收发继续使用 [聊天协议](chat.md) 的 SEND / SEND_ACK / MESSAGE / RECEIVED_ACK。
+`local` 配置的系统阶段为 `read-receipts`，包含认证、好友、单聊及最多 200 人的小群。群管理使用 Bearer 访问令牌与 HTTP，文本收发继续使用 [聊天协议](chat.md) 的 SEND / SEND_ACK / MESSAGE / RECEIVED_ACK / READ。
 
 ## 管理接口
 
@@ -66,4 +66,4 @@ RabbitMQ 分发消费者读取当前有效成员，按 joinSeq 过滤消息后�
 | 409 COMMAND_CONFLICT | 成功命令编号被用于不同参数 |
 | 503 BUSY / SERVICE_UNAVAILABLE | 暂不可用，保留原编号重试 |
 
-群消息依然只有服务端保存与设备接收两类确认；用户已读、未读计数、群公告、文件和语音消息尚未实现。
+群消息区分服务端保存、设备接收和用户已读。群成员维护各自读进度与未读数，跨设备共享；不显示“所有人已读”。群公告、文件和语音消息尚未实现。

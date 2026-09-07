@@ -1,6 +1,6 @@
 # 好友与联系人协议（已实现）
 
-当前启用 `local` 时系统信息 `stage=groups`，包含认证、单聊、好友和群聊功能。使用 `Authorization: Bearer <accessToken>`，错误结构沿用 [认证契约](auth.md) 的 `code/message`。所有 ID 均为正 Long 的十进制字符串，时间为 UTC ISO-8601。
+当前启用 `local` 时系统信息 `stage=read-receipts`，包含认证、单聊、好友、群聊及已读功能。使用 `Authorization: Bearer <accessToken>`，错误结构沿用 [认证契约](auth.md) 的 `code/message`。所有 ID 均为正 Long 的十进制字符串，时间为 UTC ISO-8601。
 
 ## 接口
 
