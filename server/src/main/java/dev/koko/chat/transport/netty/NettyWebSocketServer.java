@@ -1,6 +1,8 @@
 package dev.koko.chat.transport.netty;
 
 import com.fasterxml.jackson.core.StreamReadConstraints;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import io.netty.bootstrap.ServerBootstrap;
@@ -34,6 +36,7 @@ import java.util.concurrent.TimeUnit;
 public class NettyWebSocketServer implements SmartLifecycle {
     private static final Logger log = LoggerFactory.getLogger(NettyWebSocketServer.class);
     private final NettyProperties properties;
+    private final ImAuthSupport authentication;
     private final ObjectMapper protocolMapper;
     private EventLoopGroup boss;
     private EventLoopGroup workers;
@@ -41,6 +44,16 @@ public class NettyWebSocketServer implements SmartLifecycle {
     private volatile Channel listener;
 
     public NettyWebSocketServer(NettyProperties properties, ObjectMapper objectMapper) {
+        this(properties, objectMapper, (ImAuthSupport) null);
+    }
+
+    @Autowired
+    public NettyWebSocketServer(NettyProperties properties, ObjectMapper objectMapper, ObjectProvider<ImAuthSupport> authentication) {
+        this(properties, objectMapper, authentication.getIfAvailable());
+    }
+
+    private NettyWebSocketServer(NettyProperties properties, ObjectMapper objectMapper, ImAuthSupport authentication) {
+        this.authentication = authentication;
         this.properties = properties;
         // 独立协议解析器不影响 HTTP JSON 配置，并拒绝尾随 JSON 和过深嵌套。
         this.protocolMapper = objectMapper.copy();
@@ -85,7 +98,7 @@ public class NettyWebSocketServer implements SmartLifecycle {
                                             .handshakeTimeoutMillis(10000)
                                             .build()))
                                     .addLast(new WebSocketFrameAggregator(properties.maxMessageBytes()))
-                                    .addLast(new WebSocketProbeHandler(protocolMapper, properties));
+                                    .addLast(new WebSocketProbeHandler(protocolMapper, properties, authentication));
                         }
                     });
             // 此等待发生在 Spring 生命周期线程，不在 Netty EventLoop 上阻塞。

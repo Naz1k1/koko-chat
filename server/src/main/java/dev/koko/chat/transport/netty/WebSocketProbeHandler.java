@@ -1,6 +1,9 @@
 package dev.koko.chat.transport.netty;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import dev.koko.chat.auth.AuthException;
+import dev.koko.chat.auth.AuthModels.Identity;
+import java.util.concurrent.RejectedExecutionException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -19,21 +22,29 @@ import java.time.Instant;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-/** 仅处理轻量传输探针；后续阻塞业务必须交给 imBusinessExecutor。每个连接独享一个 Handler。 */
+/** 处理心跳与票据认证；每个连接独享状态，所有数据库及 Redis 操作离开事件循环。 */
 final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketFrame> {
     private final ObjectMapper mapper;
     private final NettyProperties properties;
     private ScheduledFuture<?> authenticationDeadline;
     private boolean upgraded;
+    private final ImAuthSupport authentication;
+    private Identity identity;
+    private boolean authenticating;
+    private boolean checking;
+    private boolean closing;
+    private ScheduledFuture<?> sessionCheck;
 
-    WebSocketProbeHandler(ObjectMapper mapper, NettyProperties properties) {
+    WebSocketProbeHandler(ObjectMapper mapper, NettyProperties properties, ImAuthSupport authentication) {
+        this.authentication = authentication;
         this.mapper = mapper;
         this.properties = properties;
     }
 
-    /** 校验 JSON 信封后分派命令；当前只响应心跳，不伪造认证成功或消息保存确认。 */
+    /** 校验 JSON 信封后分派命令；认证成功也不代表消息业务已经实现。 */
     @Override
     protected void channelRead0(ChannelHandlerContext context, WebSocketFrame frame) {
+        if (closing) return;
         if (frame instanceof BinaryWebSocketFrame) {
             close(context, 1003, "Only JSON text messages are supported");
             return;
@@ -66,13 +77,68 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
             }
             switch (type.textValue()) {
                 case "PING" -> reply(context, response("PONG", requestId));
-                case "AUTH" -> error(context, requestId, "NOT_IMPLEMENTED", "Authentication is not implemented in this skeleton");
-                case "SEND", "RECEIVED_ACK", "READ" -> error(context, requestId, "UNAUTHENTICATED", "An authenticated session is required");
+                case "AUTH" -> authenticate(context, requestId, envelope);
+                case "SEND", "RECEIVED_ACK", "READ" -> error(context, requestId, identity == null ? "UNAUTHENTICATED" : "NOT_IMPLEMENTED", identity == null ? "An authenticated session is required" : "Messaging is not implemented yet");
                 default -> error(context, requestId, "NOT_IMPLEMENTED", "Command is not implemented in this skeleton");
             }
         } catch (JsonProcessingException exception) {
             error(context, null, "INVALID_MESSAGE", "Malformed or excessively nested JSON");
         }
+    }
+
+    /** 限制每连接一个认证任务，防止重复 AUTH 堆满有界业务队列。 */
+    private void authenticate(ChannelHandlerContext context, String requestId, JsonNode envelope) {
+        if (authentication == null) { error(context, requestId, "NOT_IMPLEMENTED", "Authentication requires local profile"); return; }
+        if (identity != null || authenticating) { error(context, requestId, "AUTH_STATE", "Authentication already started"); return; }
+        JsonNode ticket = envelope.get("ticket");
+        if (ticket == null || !ticket.isTextual() || ticket.textValue().length() != 43) {
+            error(context, requestId, "UNAUTHENTICATED", "Invalid authentication ticket");
+            close(context, 1008, "Invalid ticket"); return;
+        }
+        authenticating = true;
+        try {
+            authentication.execute(() -> {
+                try {
+                    Identity result = authentication.authenticate(ticket.textValue());
+                    context.executor().execute(() -> {
+                        if (closing || !context.channel().isActive()) return;
+                        identity = result;
+                        authenticating = false;
+                        authenticationDeadline.cancel(false);
+                        authentication.attach(result, context.channel());
+                        reply(context, response("AUTH_OK", requestId).put("userId", Long.toString(result.userId()))
+                                .put("deviceId", result.deviceId()).put("sessionId", result.sessionId()));
+                        // 定期复查覆盖跨节点注销及认证结果返回前的撤销竞态，不能只依赖本机通知。
+                        sessionCheck = context.executor().scheduleWithFixedDelay(() -> checkSession(context), 0, 5, TimeUnit.SECONDS);
+                    });
+                } catch (Exception failure) {
+                    context.executor().execute(() -> {
+                        if (closing || !context.channel().isActive()) return;
+                        error(context, requestId, failure instanceof AuthException ? "UNAUTHENTICATED" : "SERVICE_UNAVAILABLE", "Unable to authenticate");
+                        close(context, failure instanceof AuthException ? 1008 : 1013, "Authentication failed");
+                    });
+                }
+            });
+        } catch (RejectedExecutionException busy) {
+            error(context, requestId, "BUSY", "Please retry later"); close(context, 1013, "Server busy");
+        }
+    }
+
+    private void checkSession(ChannelHandlerContext context) {
+        if (closing || checking || identity == null) return;
+        checking = true;
+        try {
+            authentication.execute(() -> {
+                int code;
+                try { code = authentication.active(identity) ? 0 : 1008; }
+                catch (Exception unavailable) { code = 1013; }
+                int closeCode = code;
+                context.executor().execute(() -> {
+                    checking = false;
+                    if (closeCode != 0 && !closing) close(context, closeCode, "Session unavailable, expired or revoked");
+                });
+            });
+        } catch (RejectedExecutionException busy) { close(context, 1013, "Server busy"); }
     }
 
     /** 回显请求标识，并使用服务端 UTC 时间；requestId 不承担消息幂等职责。 */
@@ -101,7 +167,7 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
     public void userEventTriggered(ChannelHandlerContext context, Object event) throws Exception {
         if (event instanceof WebSocketServerProtocolHandler.HandshakeComplete) {
             upgraded = true;
-            // 骨架尚无认证会话；心跳不会延长认证期限，防止匿名连接一直占用资源。
+            // 心跳不会延长认证期限，只有有效票据认证完成才能取消此任务。
             authenticationDeadline = context.executor().schedule(
                     () -> close(context, 1008, "Authentication required"),
                     properties.authenticationTimeout().toMillis(), TimeUnit.MILLISECONDS);
@@ -113,6 +179,9 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
 
     @Override
     public void channelInactive(ChannelHandlerContext context) throws Exception {
+        closing = true;
+        if (sessionCheck != null) sessionCheck.cancel(false);
+        if (identity != null) authentication.detach(identity, context.channel());
         // 连接关闭后取消定时任务，避免继续引用已经失效的 Channel。
         if (authenticationDeadline != null) {
             authenticationDeadline.cancel(false);
@@ -130,6 +199,8 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
     }
 
     private void close(ChannelHandlerContext context, int code, String reason) {
+        if (closing) return;
+        closing = true;
         // 握手前仍是 HTTP 连接，不能向其写 WebSocket 关闭帧。
         if (!upgraded) {
             context.close();
