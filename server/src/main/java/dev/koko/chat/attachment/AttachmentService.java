@@ -37,7 +37,7 @@ public class AttachmentService {
                 if(old.ownerId()!=identity.userId() || old.conversationId()!=id || !old.membershipEpoch().equals(body.membershipEpoch())
                         || !old.name().equals(body.name()) || old.size()!=body.size() || !old.sha256().equals(body.sha256()) || !old.kind().equals(body.kind()))
                     throw new AuthException(409,"UPLOAD_CONFLICT","同一上传编号不能对应不同附件");
-                return new View(reference(old),old.status());
+                requireNotExpired(old);return new View(reference(old),old.status());
             }
             var row=new Row(body.clientUploadId(),identity.userId(),id,body.membershipEpoch(),"attachments/"+body.clientUploadId(),
                     body.name(),body.size(),body.sha256(),body.kind(),"application/octet-stream","PENDING",null);
@@ -55,10 +55,10 @@ public class AttachmentService {
     private Row owned(Identity identity,String id) {
         validId(id);var row=mapper.find(id);
         if(row==null || row.ownerId()!=identity.userId()) throw new AuthException(404,"ATTACHMENT_NOT_FOUND","附件不存在");
-        member(identity,row.conversationId(),row.membershipEpoch());return row;
+        member(identity,row.conversationId(),row.membershipEpoch());row=mapper.find(id);requireNotExpired(row);return row;
     }
     public View upload(Identity identity,String id,InputStream input) throws IOException {
-        Row row=tx.execute(status -> owned(identity,id));
+        Row row=tx.execute(status -> { var owned=owned(identity,id);mapper.protectUpload(id);return owned; });
         acquire();
         try {
             byte[] bytes=input.readNBytes(Math.toIntExact(row.size())+1);
@@ -67,7 +67,10 @@ public class AttachmentService {
                 throw new AuthException(400,"FILE_HASH_MISMATCH","文件内容已变化，请重新选择文件");
             String type="FILE".equals(row.kind())?"application/octet-stream":imageType(bytes);
             if("PENDING".equals(row.status())) {
-                try { storage.put(row.objectKey(),bytes,type); }
+                try {
+                    storage.put(row.objectKey(),bytes,type);
+                    if("IMAGE".equals(row.kind())) storage.put("thumbnails/"+id,thumbnail(bytes),"image/jpeg");
+                }
                 catch(RuntimeException unavailable) { throw new AuthException(503,"STORAGE_UNAVAILABLE","对象存储暂不可用，请重试原上传"); }
             }
             return tx.execute(status -> {
@@ -93,7 +96,7 @@ public class AttachmentService {
     public Row forSend(Identity identity,long conversation,String epoch,String id) {
         validId(id);var row=mapper.find(id);
         if(row==null || row.ownerId()!=identity.userId() || row.conversationId()!=conversation || !row.membershipEpoch().equals(epoch)
-                || "PENDING".equals(row.status())) throw new AuthException(409,"ATTACHMENT_NOT_READY","附件尚未上传或不属于当前会话");
+                || !Set.of("READY","ATTACHED").contains(row.status())) throw new AuthException(409,"ATTACHMENT_NOT_READY","附件尚未上传或不属于当前会话");
         return row;
     }
     public void attach(String id,long message) {
@@ -115,6 +118,37 @@ public class AttachmentService {
         acquire();
         try { return new Download(reference(row),storage.get(row.objectKey()),transfers::release); }
         catch(RuntimeException unavailable) { transfers.release();throw new AuthException(503,"STORAGE_UNAVAILABLE","附件暂时无法下载"); }
+    }
+    /** 缩略图复用原图下载权限；老图片首次请求时补建，生成物不影响原消息幂等摘要。 */
+    public Download thumbnail(Identity identity,String id) throws IOException {
+        try(var original=download(identity,id)) {
+            if(!"IMAGE".equals(original.attachment().kind())) throw new AuthException(404,"THUMBNAIL_NOT_FOUND","此文件没有图片预览");
+            byte[] bytes;
+            try(var existing=storage.get("thumbnails/"+id)) { bytes=existing.readNBytes(131073); }
+            catch(software.amazon.awssdk.services.s3.model.S3Exception missing) {
+                if(missing.statusCode()!=404) throw new AuthException(503,"STORAGE_UNAVAILABLE","缩略图暂不可用");
+                bytes=thumbnail(original.stream().readNBytes(MAX_BYTES+1));
+                storage.put("thumbnails/"+id,bytes,"image/jpeg");
+            }
+            if(bytes.length>131072) throw new AuthException(503,"INVALID_THUMBNAIL","缩略图超出限制");
+            return new Download(new Reference(id,original.attachment().name()+".preview.jpg",bytes.length,HexFormat.of().formatHex(digest(bytes)),"IMAGE","image/jpeg"),new ByteArrayInputStream(bytes),()->{});
+        }
+    }
+    private byte[] thumbnail(byte[] original) throws IOException {
+        var image=ImageIO.read(new ByteArrayInputStream(original));if(image==null) { invalidImage(); }
+        double scale=Math.min(1.0,320.0/Math.max(image.getWidth(),image.getHeight()));
+        int width=Math.max(1,(int)(image.getWidth()*scale)),height=Math.max(1,(int)(image.getHeight()*scale));
+        var small=new java.awt.image.BufferedImage(width,height,java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var graphics=small.createGraphics();
+        try {
+            graphics.setColor(java.awt.Color.WHITE);graphics.fillRect(0,0,width,height);
+            graphics.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+            graphics.drawImage(image,0,0,width,height,null);
+        } finally { graphics.dispose(); }
+        var output=new ByteArrayOutputStream();ImageIO.write(small,"jpeg",output);return output.toByteArray();
+    }
+    private static void requireNotExpired(Row row) {
+        if("EXPIRED".equals(row.status())) throw new AuthException(410,"ATTACHMENT_EXPIRED","未发送附件已过期，请重新选择文件");
     }
     private static byte[] digest(byte[] bytes) {
         try { return java.security.MessageDigest.getInstance("SHA-256").digest(bytes); }

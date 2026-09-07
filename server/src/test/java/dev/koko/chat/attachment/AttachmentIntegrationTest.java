@@ -30,7 +30,7 @@ import static org.mockito.Mockito.*;
 class AttachmentIntegrationTest {
     @LocalServerPort int port;
     @Autowired AuthService auth; @Autowired AuthMapper users; @Autowired ChatService chat; @Autowired ChatMapper chats;
-    @Autowired AttachmentService files; @Autowired AttachmentMapper mapper; @Autowired RustFsStorage storage;
+    @Autowired AttachmentCleanup cleanupTask; @Autowired AttachmentService files; @Autowired AttachmentMapper mapper; @Autowired RustFsStorage storage;
     @Autowired GroupService groups; @Autowired ContactService contacts; @Autowired JdbcTemplate jdbc;
     @Autowired PlatformTransactionManager transactions; @Autowired ObjectMapper json;
     private final List<Long> people=new ArrayList<>();private final Set<String> conversations=new HashSet<>();
@@ -120,8 +120,35 @@ class AttachmentIntegrationTest {
         var invalid=create(a,info,fake,"IMAGE");var rejected=put(a,invalid,fake);
         assertThat(rejected.statusCode()).isEqualTo(400);assertThat(json.readTree(rejected.body()).path("code").asText()).isEqualTo("INVALID_IMAGE");
     }
+    @Test void thumbnailAndExpiredCleanupKeepSentFilesAndRetryFailedDeletion() throws Exception {
+        var a=person();var b=person();var info=direct(a,b);
+        var image=new java.awt.image.BufferedImage(800,400,java.awt.image.BufferedImage.TYPE_INT_RGB);
+        var out=new ByteArrayOutputStream();javax.imageio.ImageIO.write(image,"png",out);byte[] bytes=out.toByteArray();
+        var sent=create(a,info,bytes,"IMAGE");assertThat(put(a,sent,bytes).statusCode()).isEqualTo(200);
+        chat.send(a.identity(),send(info,sent,UUID.randomUUID().toString()));
+        var preview=http(b,"GET","/api/attachments/"+sent.clientUploadId()+"/thumbnail",null,null);
+        assertThat(preview.statusCode()).isEqualTo(200);
+        var decoded=javax.imageio.ImageIO.read(new ByteArrayInputStream(preview.body()));
+        assertThat(decoded.getWidth()).isEqualTo(320);assertThat(decoded.getHeight()).isEqualTo(160);
+        assertThat(preview.headers().firstValue("X-Content-SHA256").orElseThrow()).isEqualTo(HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(preview.body())));
+        var unsent=create(a,info,bytes,"IMAGE");assertThat(put(a,unsent,bytes).statusCode()).isEqualTo(200);
+        jdbc.update("UPDATE attachment SET expires_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 DAY) WHERE conversation_id=?",info.id());
+        var brokenStorage=mock(RustFsStorage.class);doThrow(new IllegalStateException("injected deletion failure")).when(brokenStorage).delete(anyString());
+        new AttachmentCleanup(mapper,chats,brokenStorage,transactions).cleanup();
+        assertThat(mapper.find(unsent.clientUploadId()).status()).isEqualTo("EXPIRED");
+        assertThat(put(a,unsent,bytes).statusCode()).isEqualTo(410);
+        assertThatThrownBy(()->files.create(a.identity(),info.id(),unsent)).isInstanceOf(AuthException.class).extracting("code").isEqualTo("ATTACHMENT_EXPIRED");
+        assertThatThrownBy(()->chat.send(a.identity(),send(info,unsent,UUID.randomUUID().toString()))).isInstanceOf(AuthException.class);
+        cleanupTask.cleanup();
+        for(String prefix:List.of("attachments/","thumbnails/")) assertThatThrownBy(()->storage.get(prefix+unsent.clientUploadId())).isInstanceOf(software.amazon.awssdk.services.s3.model.S3Exception.class);
+        assertThat(get(b,sent).body()).isEqualTo(bytes);
+        // 模拟超时上传在清理后才落对象，下轮定期复删墓碑对应的路径。
+        storage.put("attachments/"+unsent.clientUploadId(),bytes,"image/png");
+        jdbc.update("UPDATE attachment SET cleanup_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 2 HOUR) WHERE id=?",unsent.clientUploadId());cleanupTask.cleanup();
+        assertThatThrownBy(()->storage.get("attachments/"+unsent.clientUploadId())).isInstanceOf(software.amazon.awssdk.services.s3.model.S3Exception.class);
+    }
     @AfterEach void cleanup() {
-        for(String key:objects) storage.delete(key);
+        for(String key:objects) {storage.delete(key);storage.delete(key.replace("attachments/","thumbnails/"));}
         for(String id:conversations) {
             jdbc.update("DELETE FROM device_cursor WHERE conversation_id=?",id);
             jdbc.update("DELETE FROM message_outbox WHERE message_id IN (SELECT id FROM message WHERE conversation_id=?)",id);

@@ -19,7 +19,8 @@ public final class AttachmentTestCleanup {
                 while(rows.next()) {
                     String id=rows.getString(1),key=rows.getString(2);AttachmentService.validId(id);
                     if(!key.equals("attachments/"+id)) throw new IllegalStateException("测试对象路径不合法");
-                    s3.deleteObject(b -> b.bucket(env.getOrDefault("RUSTFS_BUCKET","koko-chat")).key(key));count++;
+                    s3.deleteObject(b -> b.bucket(env.getOrDefault("RUSTFS_BUCKET","koko-chat")).key(key));
+                    s3.deleteObject(b -> b.bucket(env.getOrDefault("RUSTFS_BUCKET","koko-chat")).key("thumbnails/"+id));count++;
                 }
             }
             System.out.println("已清理本次联调附件对象："+count);

@@ -31,4 +31,12 @@ public class AttachmentController {
             download.stream().transferTo(response.getOutputStream());
         }
     }
+    @GetMapping("/api/attachments/{id}/thumbnail")
+    public void thumbnail(@RequestHeader(value="Authorization",required=false) String token,@PathVariable String id,HttpServletResponse response) throws IOException {
+        try(var download=attachments.thumbnail(auth.authenticate(token),id)) {
+            response.setContentType("image/jpeg");response.setContentLengthLong(download.attachment().size());
+            response.setHeader("X-Content-Type-Options","nosniff");response.setHeader("X-Content-SHA256",download.attachment().sha256());
+            download.stream().transferTo(response.getOutputStream());
+        }
+    }
 }
