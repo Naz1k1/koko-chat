@@ -18,6 +18,9 @@ public class ChatController {
             @RequestParam(defaultValue="0") String afterId,@RequestParam(defaultValue="50") int limit) {
         return chat.conversations(auth.authenticate(token),afterId,limit);
     }
+    @GetMapping("/{id}") public ConversationView summary(@RequestHeader(value="Authorization",required=false) String token,@PathVariable String id) {
+        return chat.summary(auth.authenticate(token),id);
+    }
     @GetMapping("/{id}/messages") public MessagePage history(@RequestHeader(value="Authorization",required=false) String token,
             @PathVariable String id,@RequestParam(defaultValue="0") String afterSeq,@RequestParam(required=false) String toSeq,
             @RequestParam(defaultValue="50") int limit) {

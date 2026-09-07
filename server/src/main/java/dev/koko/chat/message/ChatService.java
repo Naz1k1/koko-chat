@@ -55,14 +55,23 @@ public class ChatService {
     }
     public MessagePage history(Identity identity,String conversation,String after,String upper,int limit) {
         requireActive(identity);checkLimit(limit);
-        long id=number(conversation,false);var member=member(identity,id,null);var chat=mapper.conversation(id);
-        long to=upper==null?chat.latestSeq():Math.min(number(upper,true),chat.latestSeq());
-        long cursor=Math.max(number(after,true),member.joinSeq()-1);
-        var rows=mapper.messages(id,cursor,to,limit+1);boolean more=rows.size()>limit;
-        var page=rows.stream().limit(limit).map(ChatModels::view).toList();
-        return new MessagePage(page,member.membershipEpoch(),Long.toString(member.joinSeq()),Long.toString(to),
-                page.isEmpty()?Long.toString(cursor):page.getLast().seq(),more);
+        long id=number(conversation,false);
+        // 与退出、移除和重新加入共用会话锁，整页历史使用同一个成员周期和可见范围。
+        return tx.execute(status -> {
+            var chat=mapper.lockConversation(id);var member=member(identity,id,null);
+            long to=upper==null?chat.latestSeq():Math.min(number(upper,true),chat.latestSeq());
+            long cursor=Math.max(number(after,true),member.joinSeq()-1);
+            var rows=mapper.messages(id,cursor,to,limit+1);boolean more=rows.size()>limit;
+            var page=rows.stream().limit(limit).map(ChatModels::view).toList();
+            return new MessagePage(page,member.membershipEpoch(),Long.toString(member.joinSeq()),Long.toString(to),
+                    page.isEmpty()?Long.toString(cursor):page.getLast().seq(),more);
+        });
     }
+    public ConversationView summary(Identity identity,String id) {
+        requireActive(identity);long conversation=number(id,false);member(identity,conversation,null);
+        return mapper.summary(conversation,identity.userId());
+    }
+
     public MessageView send(Identity identity,SendCommand command) {
         requireActive(identity);
         long conversation=number(command.conversationId(),false);
@@ -101,13 +110,15 @@ public class ChatService {
     public void received(Identity identity,ReceiptCommand command) {
         requireActive(identity);long id=number(command.conversationId(),false),seq=number(command.receivedSeq(),true);
         if(command.membershipEpoch()==null || !command.membershipEpoch().matches("[a-f0-9-]{36}")) invalid();
-        var member=member(identity,id,command.membershipEpoch());
-        if(seq<member.joinSeq()-1 || seq>mapper.conversation(id).latestSeq()) invalid();
-        mapper.receipt(identity.userId(),identity.deviceId(),id,member.membershipEpoch(),seq);
+        tx.executeWithoutResult(status -> {
+            var chat=mapper.lockConversation(id);var member=member(identity,id,command.membershipEpoch());
+            if(seq<member.joinSeq()-1 || seq>chat.latestSeq()) invalid();
+            mapper.receipt(identity.userId(),identity.deviceId(),id,member.membershipEpoch(),seq);
+        });
     }
     public MemberRow member(Identity identity,long id,String epoch) {
         var chat=mapper.conversation(id);var member=mapper.member(id,identity.userId());
-        if(chat==null || !chat.status().equals("ACTIVE") || !chat.type().equals("DIRECT") || member==null || !member.status().equals("ACTIVE"))
+        if(chat==null || !chat.status().equals("ACTIVE") || !Set.of("DIRECT","GROUP").contains(chat.type()) || member==null || !member.status().equals("ACTIVE"))
             throw new AuthException(403,"NOT_A_MEMBER","无权访问此会话");
         if(epoch!=null && !epoch.equals(member.membershipEpoch())) throw new AuthException(409,"MEMBERSHIP_CHANGED","会话成员状态已变更，请重新同步");
         return member;

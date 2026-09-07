@@ -5,14 +5,14 @@ import jakarta.validation.constraints.Pattern;
 import java.time.LocalDateTime;
 import java.util.List;
 
-/** 单聊契约：网络上的 BIGINT 均为十进制字符串，序号以数据库提交顺序为准。 */
+/** 单聊和群聊契约：网络上的 BIGINT 均为十进制字符串，序号以数据库提交顺序为准。 */
 public final class ChatModels {
     private ChatModels() {}
     public record DirectRequest(@NotBlank @Pattern(regexp="[A-Za-z0-9_]{3,32}") String account) {}
     public record ConversationRow(long id, long latestSeq, String status, String type) {}
     public record MemberRow(long conversationId, long userId, String membershipEpoch, long joinSeq, String status) {}
     public record ConversationView(String id, String peerId, String account, String nickname,
-            String membershipEpoch, String visibleFromSeq, String latestSeq) {}
+            String membershipEpoch, String visibleFromSeq, String latestSeq, String type, String ownerId) {}
     public record ConversationPage(List<ConversationView> conversations, String nextCursor, boolean hasMore) {}
     public record MessageRow(long id, long conversationId, long seq, long senderId, String senderMembershipEpoch,
             String clientMsgId, String type, String text, byte[] bodyHash, LocalDateTime serverTime) {}

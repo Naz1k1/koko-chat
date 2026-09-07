@@ -19,21 +19,17 @@ public interface ChatMapper {
     MemberRow member(long conversation,long user);
     @Select("SELECT conversation_id,user_id,membership_epoch,join_seq,status FROM conversation_member WHERE conversation_id=#{conversation} AND status='ACTIVE'")
     List<MemberRow> members(long conversation);
-    @Select("""
-        SELECT CAST(c.id AS CHAR) id,CAST(u.id AS CHAR) peer_id,u.account,u.nickname,m.membership_epoch,
-        CAST(m.join_seq AS CHAR) visible_from_seq,CAST(c.latest_seq AS CHAR) latest_seq
-        FROM conversation c JOIN conversation_member m ON m.conversation_id=c.id AND m.user_id=#{user}
-        JOIN conversation_member peer ON peer.conversation_id=c.id AND peer.user_id<>#{user}
-        JOIN app_user u ON u.id=peer.user_id WHERE c.type='DIRECT' AND c.status='ACTIVE' AND m.status='ACTIVE'
-        AND peer.status='ACTIVE' AND c.id>#{after} ORDER BY c.id LIMIT #{limit}
-        """) List<ConversationView> conversations(long user,long after,int limit);
-    @Select("""
-        SELECT CAST(c.id AS CHAR) id,CAST(u.id AS CHAR) peer_id,u.account,u.nickname,m.membership_epoch,
-        CAST(m.join_seq AS CHAR) visible_from_seq,CAST(c.latest_seq AS CHAR) latest_seq
-        FROM conversation c JOIN conversation_member m ON m.conversation_id=c.id AND m.user_id=#{user}
-        JOIN conversation_member peer ON peer.conversation_id=c.id AND peer.user_id<>#{user}
-        JOIN app_user u ON u.id=peer.user_id WHERE c.id=#{id} AND c.type='DIRECT' AND m.status='ACTIVE'
-        """) ConversationView summary(long id,long user);
+    String SUMMARY_COLUMNS = "CAST(c.id AS CHAR) id,CAST(u.id AS CHAR) peer_id,u.account,"
+            + "CASE WHEN c.type='GROUP' THEN c.title ELSE u.nickname END nickname,m.membership_epoch,"
+            + "CAST(m.join_seq AS CHAR) visible_from_seq,CAST(c.latest_seq AS CHAR) latest_seq,c.type,CAST(c.owner_id AS CHAR) owner_id";
+    String SUMMARY_JOIN = " FROM conversation c JOIN conversation_member m ON m.conversation_id=c.id AND m.user_id=#{user} "
+            + "LEFT JOIN conversation_member peer ON c.type='DIRECT' AND peer.conversation_id=c.id AND peer.user_id<>#{user} AND peer.status='ACTIVE' "
+            + "LEFT JOIN app_user u ON u.id=peer.user_id ";
+    @Select("SELECT " + SUMMARY_COLUMNS + SUMMARY_JOIN
+            + "WHERE c.status='ACTIVE' AND m.status='ACTIVE' AND c.id>#{after} ORDER BY c.id LIMIT #{limit}")
+    List<ConversationView> conversations(long user,long after,int limit);
+    @Select("SELECT " + SUMMARY_COLUMNS + SUMMARY_JOIN + "WHERE c.id=#{id} AND c.status='ACTIVE' AND m.status='ACTIVE'")
+    ConversationView summary(long id,long user);
     String MESSAGE_COLUMNS="id,conversation_id,seq,sender_id,sender_membership_epoch,client_msg_id,type,JSON_UNQUOTE(JSON_EXTRACT(body,'$.text')) text,body_hash,server_time";
     @Select("SELECT "+MESSAGE_COLUMNS+" FROM message WHERE sender_id=#{user} AND client_msg_id=#{clientId}") MessageRow byClient(long user,String clientId);
     @Select("SELECT "+MESSAGE_COLUMNS+" FROM message WHERE id=#{id}") MessageRow message(long id);
