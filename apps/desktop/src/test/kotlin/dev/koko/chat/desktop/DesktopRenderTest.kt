@@ -59,7 +59,7 @@ class DesktopRenderTest {
                     } finally { scene.close() }
                 }
                 // 固定演示数据仅用于实际聊天组件的布局验收，不参与运行时业务。
-                val conversation=ConversationInfo("10","2","xiaoyu","小雨","preview-epoch","1","2")
+                val conversation=ConversationInfo("10","2","xiaoyu","小雨","preview-epoch","1","2",lastReadSeq="1",unreadCount="3",peerLastReadSeq="2")
                 val session=SessionUiState(SessionState.ONLINE,UserProfile("1","yako","Yako"),"IM 在线","preview-session")
                 val messages=listOf(
                     ChatMessage("101","10","1","2","p1","TEXT","你好，今天开始一起完善 koko-chat 吧。","2026-09-08T00:00:00Z"),
