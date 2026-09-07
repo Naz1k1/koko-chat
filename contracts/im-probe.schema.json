@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "koko-chat JSON v1 骨架探针",
+  "description": "骨架阶段的应用级心跳与错误响应；认证和消息协议待业务阶段实现。",
+  "type": "object",
+  "required": ["v", "type"],
+  "properties": {
+    "v": { "const": 1 },
+    "type": { "enum": ["PING", "PONG", "ERROR"] },
+    "requestId": { "type": "string", "maxLength": 128 },
+    "serverTime": { "type": "string", "format": "date-time" },
+    "code": { "type": "string", "minLength": 1 },
+    "message": { "type": "string", "minLength": 1 }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "enum": ["PONG", "ERROR"] } } },
+      "then": { "required": ["serverTime"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "ERROR" } } },
+      "then": { "required": ["code", "message"] }
+    }
+  ]
+}

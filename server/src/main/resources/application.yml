@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: koko-chat
+  profiles:
+    default: skeleton
+  lifecycle:
+    timeout-per-shutdown-phase: 10s
+
+server:
+  address: ${HTTP_HOST:127.0.0.1}
+  port: ${HTTP_PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+koko:
+  version: '@project.version@'
+  netty:
+    host: ${IM_HOST:127.0.0.1}
+    port: ${IM_PORT:8081}
+    path: /im
+    max-frame-bytes: 16384
+    max-message-bytes: 16384
+    idle-timeout: 75s
+    authentication-timeout: 30s

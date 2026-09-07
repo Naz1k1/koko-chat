@@ -28,6 +28,12 @@ yarn-error.log*
 /build/
 /out/
 /target/
+**/target/
+**/build/
+**/.gradle/
+**/.kotlin/
+**/local.properties
+**/hs_err_pid*.log
 
 # --- Environment & secrets ---
 .env

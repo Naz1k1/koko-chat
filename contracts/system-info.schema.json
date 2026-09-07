@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "koko-chat 系统信息",
+  "description": "GET /api/system/info，服务可达不等于聊天会话已认证。",
+  "type": "object",
+  "required": ["name", "version", "stage", "httpPort", "imPort", "imPath"],
+  "properties": {
+    "name": { "const": "koko-chat" },
+    "version": { "type": "string", "minLength": 1 },
+    "stage": { "type": "string", "minLength": 1 },
+    "httpPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "imPort": { "type": "integer", "minimum": 1, "maximum": 65535 },
+    "imPath": { "type": "string", "pattern": "^/[a-zA-Z0-9/_-]+$" }
+  }
+}
