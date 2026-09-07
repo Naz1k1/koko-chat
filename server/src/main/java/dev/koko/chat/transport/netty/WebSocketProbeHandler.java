@@ -136,7 +136,7 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
                 ObjectNode result;
                 try {
                     if(type.equals("SEND")) {
-                        var sent=authentication.send(identity,new SendCommand(field(envelope,"conversationId"),field(envelope,"membershipEpoch"),field(envelope,"clientMsgId"),field(envelope,"text")));
+                        var sent=authentication.send(identity,new SendCommand(field(envelope,"conversationId"),field(envelope,"membershipEpoch"),field(envelope,"clientMsgId"),field(envelope,"text"),field(envelope,"attachmentId")));
                         result=response("SEND_ACK",requestId);result.set("message",mapper.valueToTree(sent));
                     } else if(type.equals("READ")) {
                         var summary=authentication.read(identity,new ReadCommand(field(envelope,"conversationId"),field(envelope,"membershipEpoch"),field(envelope,"readSeq")));

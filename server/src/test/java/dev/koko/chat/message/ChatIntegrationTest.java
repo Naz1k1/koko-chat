@@ -112,7 +112,7 @@ class ChatIntegrationTest {
         var a=person();var b=person();var view=conversation(a,b);
         ChatMapper failure=spy(mapper);
         doThrow(new IllegalStateException("injected outbox failure")).when(failure).insertOutbox(anyString(),anyLong(),anyString());
-        var broken=new ChatService(failure,org.mockito.Mockito.mock(AuthMapper.class),auth,new com.fasterxml.jackson.databind.ObjectMapper(),transactions,event -> {});
+        var broken=new ChatService(failure,org.mockito.Mockito.mock(AuthMapper.class),auth,new com.fasterxml.jackson.databind.ObjectMapper(),transactions,event -> {},org.mockito.Mockito.mock(dev.koko.chat.attachment.AttachmentService.class));
         var command=new SendCommand(view.id(),view.membershipEpoch(),UUID.randomUUID().toString(),"必须原子提交");
         assertThatThrownBy(()->broken.send(a.identity(),command)).isInstanceOf(IllegalStateException.class);
         assertThat(mapper.conversation(Long.parseLong(view.id())).latestSeq()).isZero();

@@ -33,16 +33,16 @@ public interface ChatMapper {
     List<ConversationView> conversations(long user,long after,int limit);
     @Select("SELECT " + SUMMARY_COLUMNS + SUMMARY_JOIN + "WHERE c.id=#{id} AND c.status='ACTIVE' AND m.status='ACTIVE'")
     ConversationView summary(long id,long user);
-    String MESSAGE_COLUMNS="id,conversation_id,seq,sender_id,sender_membership_epoch,client_msg_id,type,JSON_UNQUOTE(JSON_EXTRACT(body,'$.text')) text,body_hash,server_time";
+    String MESSAGE_COLUMNS="id,conversation_id,seq,sender_id,sender_membership_epoch,client_msg_id,type,JSON_UNQUOTE(JSON_EXTRACT(body,'$.text')) text,body_hash,server_time,JSON_EXTRACT(body,'$.attachment') attachment_json";
     @Select("SELECT "+MESSAGE_COLUMNS+" FROM message WHERE sender_id=#{user} AND client_msg_id=#{clientId}") MessageRow byClient(long user,String clientId);
     @Select("SELECT "+MESSAGE_COLUMNS+" FROM message WHERE id=#{id}") MessageRow message(long id);
     @Select("SELECT "+MESSAGE_COLUMNS+" FROM message WHERE conversation_id=#{conversation} AND seq>#{after} AND seq<=#{to} ORDER BY seq LIMIT #{limit}")
     List<MessageRow> messages(long conversation,long after,long to,int limit);
     @Update("UPDATE conversation SET latest_seq=latest_seq+1 WHERE id=#{id}") void advance(long id);
     @Insert("""
-        INSERT INTO message(id,conversation_id,seq,sender_id,sender_membership_epoch,client_msg_id,type,body,body_hash)
-        VALUES(#{id},#{conversation},#{seq},#{sender},#{epoch},#{clientId},'TEXT',#{body},#{hash})
-        """) void insertMessage(long id,long conversation,long seq,long sender,String epoch,String clientId,String body,byte[] hash);
+        INSERT INTO message(id,conversation_id,seq,sender_id,sender_membership_epoch,client_msg_id,type,body,body_hash,attachment_id)
+        VALUES(#{id},#{conversation},#{seq},#{sender},#{epoch},#{clientId},#{type},#{body},#{hash},#{attachment})
+        """) void insertMessage(long id,long conversation,long seq,long sender,String epoch,String clientId,String body,byte[] hash,String type,String attachment);
     @Insert("INSERT INTO message_outbox(event_id,message_id,payload) VALUES(#{event},#{message},#{payload})")
     void insertOutbox(String event,long message,String payload);
     @Select("SELECT COUNT(*) FROM message_outbox WHERE status<>'PUBLISHED'") int pendingCount();

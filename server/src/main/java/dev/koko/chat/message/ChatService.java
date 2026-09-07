@@ -21,10 +21,11 @@ public class ChatService {
     private final AuthMapper users;
     private final AuthService auth;
     private final ObjectMapper json;
+    private final dev.koko.chat.attachment.AttachmentService attachments;
     private final TransactionTemplate tx;
     private final org.springframework.context.ApplicationEventPublisher events;
-    public ChatService(ChatMapper mapper,AuthMapper users,AuthService auth,ObjectMapper json,PlatformTransactionManager transactions,org.springframework.context.ApplicationEventPublisher events) {
-        this.mapper=mapper;this.users=users;this.auth=auth;this.json=json;this.events=events;
+    public ChatService(ChatMapper mapper,AuthMapper users,AuthService auth,ObjectMapper json,PlatformTransactionManager transactions,org.springframework.context.ApplicationEventPublisher events,dev.koko.chat.attachment.AttachmentService attachments) {
+        this.mapper=mapper;this.users=users;this.auth=auth;this.json=json;this.events=events;this.attachments=attachments;
         tx=new TransactionTemplate(transactions);tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
     public ConversationView createDirect(Identity identity,String account) {
@@ -82,15 +83,22 @@ public class ChatService {
         if(command.membershipEpoch()==null || !command.membershipEpoch().matches("[a-f0-9-]{36}")) invalid();
         if(command.clientMsgId()==null || !command.clientMsgId().matches("[A-Za-z0-9_-]{1,64}")) invalid();
         String text=command.text();
-        if(text==null || text.isBlank() || text.getBytes(StandardCharsets.UTF_8).length>4096) invalid();
-        String body=encode(Map.of("text",text));
-        if(body.getBytes(StandardCharsets.UTF_8).length>8192) invalid();
-        byte[] hash=AuthService.digest(body);
+        boolean file=command.attachmentId()!=null;
+        if(file) {
+            dev.koko.chat.attachment.AttachmentService.validId(command.attachmentId());
+            if(text!=null && !text.isEmpty()) invalid();
+        } else if(text==null || text.isBlank() || text.getBytes(StandardCharsets.UTF_8).length>4096) invalid();
         for(int attempt=0;attempt<3;attempt++) {
             try {
                 return tx.execute(status -> {
                     var chat=mapper.lockConversation(conversation);
                     var member=member(identity,conversation,command.membershipEpoch());
+                    var attachment=file?attachments.forSend(identity,conversation,member.membershipEpoch(),command.attachmentId()):null;
+                    String type=file?attachment.kind():"TEXT";
+                    String body=file?encode(Map.of("text",("IMAGE".equals(type)?"[图片] ":"[文件] ")+attachment.name(),
+                            "attachment",dev.koko.chat.attachment.AttachmentModels.reference(attachment))):encode(Map.of("text",text));
+                    if(body.getBytes(StandardCharsets.UTF_8).length>8192) invalid();
+                    byte[] hash=AuthService.digest(body);
                     var previous=mapper.byClient(identity.userId(),command.clientMsgId());
                     if(previous!=null) return duplicate(previous,conversation,member.membershipEpoch(),hash);
                     if(mapper.pendingCount()>=10000) throw new AuthException(503,"OUTBOX_FULL","待分发消息过多，请稍后重试");
@@ -98,7 +106,8 @@ public class ChatService {
                     long id=RANDOM.nextLong(1,Long.MAX_VALUE), seq=chat.latestSeq()+1;
                     String event=UUID.randomUUID().toString();
                     mapper.advance(conversation);
-                    mapper.insertMessage(id,conversation,seq,identity.userId(),member.membershipEpoch(),command.clientMsgId(),body,hash);
+                    mapper.insertMessage(id,conversation,seq,identity.userId(),member.membershipEpoch(),command.clientMsgId(),body,hash,type,command.attachmentId());
+                    if(file) attachments.attach(command.attachmentId(),id);
                     mapper.insertOutbox(event,id,encode(new MessageEvent(1,"message.created",event,Long.toString(id),Long.toString(conversation),Long.toString(seq),0)));
                     return view(mapper.message(id));
                 });

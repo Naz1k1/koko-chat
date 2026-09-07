@@ -1,0 +1,30 @@
+-- 附件元数据与消息分开保存，正文存放在 RustFS 私有桶；上传编号由客户端持久化以支持重试。
+CREATE TABLE attachment (
+    id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '上传幂等编号',
+    owner_id BIGINT NOT NULL COMMENT '上传用户',
+    conversation_id BIGINT NOT NULL COMMENT '所属会话，不允许跨会话复用',
+    membership_epoch CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '上传者成员周期',
+    object_key VARCHAR(160) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT 'RustFS 对象键，不包含原文件名',
+    name VARCHAR(180) NOT NULL COMMENT '原文件展示名，不作为本地或对象路径',
+    size BIGINT NOT NULL COMMENT '原文件字节数',
+    sha256 CHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL COMMENT '内容 SHA-256',
+    kind VARCHAR(16) NOT NULL COMMENT 'IMAGE 或 FILE',
+    content_type VARCHAR(80) NOT NULL DEFAULT 'application/octet-stream' COMMENT '服务器检测的媒体类型',
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING、READY、ATTACHED',
+    message_id BIGINT NULL COMMENT '绑定的消息，仅与消息保存同事务赋值',
+    created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_attachment_key (object_key),
+    UNIQUE KEY uk_attachment_message (message_id),
+    KEY idx_attachment_owner (owner_id, status),
+    CONSTRAINT fk_attachment_owner FOREIGN KEY (owner_id) REFERENCES app_user(id),
+    CONSTRAINT fk_attachment_conversation FOREIGN KEY (conversation_id) REFERENCES conversation(id),
+    CONSTRAINT ck_attachment_size CHECK (size BETWEEN 1 AND 10485760),
+    CONSTRAINT ck_attachment_kind CHECK (kind IN ('IMAGE','FILE')),
+    CONSTRAINT ck_attachment_status CHECK ((status IN ('PENDING','READY') AND message_id IS NULL) OR (status='ATTACHED' AND message_id IS NOT NULL))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='RustFS 附件与上传状态';
+ALTER TABLE message DROP CHECK ck_message_type,
+    ADD CONSTRAINT ck_message_type CHECK (type IN ('TEXT','EMOJI','IMAGE','FILE')),
+    ADD COLUMN attachment_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NULL COMMENT '附件引用' AFTER body,
+    ADD CONSTRAINT fk_message_attachment FOREIGN KEY (attachment_id) REFERENCES attachment(id);

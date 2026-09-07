@@ -16,12 +16,14 @@ public final class ChatModels {
             String lastReadSeq, String unreadCount, String peerLastReadSeq) {}
     public record ConversationPage(List<ConversationView> conversations, String nextCursor, boolean hasMore) {}
     public record MessageRow(long id, long conversationId, long seq, long senderId, String senderMembershipEpoch,
-            String clientMsgId, String type, String text, byte[] bodyHash, LocalDateTime serverTime) {}
+            String clientMsgId, String type, String text, byte[] bodyHash, LocalDateTime serverTime, String attachmentJson) {}
     public record MessageView(String id, String conversationId, String seq, String senderId, String clientMsgId,
-            String type, String text, String serverTime) {}
+            String type, String text, String serverTime, dev.koko.chat.attachment.AttachmentModels.Reference attachment) {}
     public record MessagePage(List<MessageView> messages, String membershipEpoch, String visibleFromSeq,
             String toSeq, String nextCursor, boolean hasMore) {}
-    public record SendCommand(String conversationId, String membershipEpoch, String clientMsgId, String text) {}
+    public record SendCommand(String conversationId, String membershipEpoch, String clientMsgId, String text, String attachmentId) {
+        public SendCommand(String conversationId,String epoch,String clientMsgId,String text) { this(conversationId,epoch,clientMsgId,text,null); }
+    }
     public record ReceiptCommand(String conversationId, String membershipEpoch, String receivedSeq) {}
     /** READ 是用户共享进度；接收确认仍属于当前设备。 */
     public record ReadCommand(String conversationId, String membershipEpoch, String readSeq) {}
@@ -35,8 +37,14 @@ public final class ChatModels {
             return new MessageEvent(eventVersion,eventType,eventId,messageId,conversationId,seq,attempt+1,user,device);
         }
     }
+    private static final com.fasterxml.jackson.databind.ObjectMapper JSON=new com.fasterxml.jackson.databind.ObjectMapper();
+    private static dev.koko.chat.attachment.AttachmentModels.Reference attachment(String value) {
+        if(value==null || value.equals("null")) return null;
+        try { return JSON.readValue(value,dev.koko.chat.attachment.AttachmentModels.Reference.class); }
+        catch(Exception corrupt) { throw new IllegalStateException("Invalid stored attachment metadata",corrupt); }
+    }
     public static MessageView view(MessageRow row) {
         return new MessageView(Long.toString(row.id()),Long.toString(row.conversationId()),Long.toString(row.seq()),
-                Long.toString(row.senderId()),row.clientMsgId(),row.type(),row.text(),row.serverTime().toInstant(java.time.ZoneOffset.UTC).toString());
+                Long.toString(row.senderId()),row.clientMsgId(),row.type(),row.text(),row.serverTime().toInstant(java.time.ZoneOffset.UTC).toString(), attachment(row.attachmentJson()));
     }
 }
