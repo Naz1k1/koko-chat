@@ -96,3 +96,9 @@ export KOKO_CHAT_MYSQL_TEST_USER=root
 MySQL 继续复用 V1 的 conversation_member.last_read_seq 与 device_cursor，无新增业务表或 Flyway 版本，V1–V3 均保持原样。会话摘要按 message(conversation_id,seq) 范围统计其他发送者的未读消息；当前采用精确 COUNT，尚未做大规模会话或积压消息下的性能测试。
 
 桌面消息库增加 [pending_read 建表定义](../apps/desktop/src/main/chatdb/dev/koko/chat/desktop/data/chat/ChatCache.sq) 和 [v1→v2 迁移](../apps/desktop/src/main/chatdb/dev/koko/chat/desktop/data/chat/1.sqm)，保存 conversation_id、epoch、read_seq，每个会话只保留同周期最大待确认位置。确认覆盖后删除，退群/移除/新周期清理；账号和服务文件隔离不变。迁移测试从含消息的真实 v1 SQLite 结构打开生产驱动，验证旧消息保留且新阅读意图可持久化。
+
+## 历史展示分页查询
+
+[ChatCache.sq](../apps/desktop/src/main/chatdb/dev/koko/chat/desktop/data/chat/ChatCache.sq) 增加按 conversation_id、epoch 和 seq 查询的 olderMessages、messagesFrom、hasMessagesBefore，复用现有联合唯一索引。向前分页使用 `seq < beforeSeq ORDER BY seq DESC LIMIT 50`，返回展示前转为升序，避免 OFFSET 随新消息到来发生偏移；visibleFromSeq 和当前成员周期限制仍有效。
+
+展开后的刷新从当前展示起点读取至本地最新，切换会话/周期或返回最新恢复默认 200 条。分页不写消息、不推进 received_seq 或 last_read_seq，只改变当前界面的展示范围。本阶段只有查询变化，无新增 SQLite 表或迁移，消息库版本仍为 v2；MySQL V1–V3 同样未修改。
