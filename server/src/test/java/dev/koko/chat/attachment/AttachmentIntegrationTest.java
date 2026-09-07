@@ -83,6 +83,8 @@ class AttachmentIntegrationTest {
         assertThat(chats.conversation(Long.parseLong(info.id())).latestSeq()).isZero();
         var sent=chat.send(a.identity(),command);assertThat(sent.type()).isEqualTo("FILE");assertThat(sent.attachment().sha256()).isEqualTo(file.sha256());
         assertThat(chat.send(a.identity(),command).id()).isEqualTo(sent.id());
+        String canonical=json.writeValueAsString(new TreeMap<>(Map.of("text",sent.text(),"attachment",sent.attachment())));
+        assertThat(chats.message(Long.parseLong(sent.id())).bodyHash()).isEqualTo(AuthService.digest(canonical));
         assertThat(put(a,file,bytes).statusCode()).isEqualTo(200);
         assertThatThrownBy(()->chat.send(a.identity(),send(info,file,UUID.randomUUID().toString())))
                 .isInstanceOf(AuthException.class).extracting("code").isEqualTo("ATTACHMENT_USED");

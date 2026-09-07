@@ -95,8 +95,9 @@ public class ChatService {
                     var member=member(identity,conversation,command.membershipEpoch());
                     var attachment=file?attachments.forSend(identity,conversation,member.membershipEpoch(),command.attachmentId()):null;
                     String type=file?attachment.kind():"TEXT";
-                    String body=file?encode(Map.of("text",("IMAGE".equals(type)?"[图片] ":"[文件] ")+attachment.name(),
-                            "attachment",dev.koko.chat.attachment.AttachmentModels.reference(attachment))):encode(Map.of("text",text));
+                    // 多字段正文按键排序，避免 Map.of 在不同 JVM 中的遍历顺序影响重启后的幂等摘要。
+                    String body=file?encode(new TreeMap<>(Map.of("text",("IMAGE".equals(type)?"[图片] ":"[文件] ")+attachment.name(),
+                            "attachment",dev.koko.chat.attachment.AttachmentModels.reference(attachment)))):encode(Map.of("text",text));
                     if(body.getBytes(StandardCharsets.UTF_8).length>8192) invalid();
                     byte[] hash=AuthService.digest(body);
                     var previous=mapper.byClient(identity.userId(),command.clientMsgId());
