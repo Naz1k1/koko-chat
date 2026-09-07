@@ -74,11 +74,45 @@ class ChatIntegrationTest {
         assertThatThrownBy(()->chat.history(outsider.identity(),view.id(),"0",null,50)).isInstanceOf(AuthException.class);
         assertThatThrownBy(()->chat.send(a.identity(),new SendCommand(view.id(),UUID.randomUUID().toString(),"stale","旧成员周期"))).isInstanceOf(AuthException.class);
     }
+    @Test void readProgressIsSharedMonotonicAndBoundedByEachDeviceReceipt() throws Exception {
+        var a=person();var b=person();var outsider=person();var view=conversation(a,b);
+        var bob=chat.summary(b.identity(),view.id());
+        chat.send(a.identity(),new SendCommand(view.id(),view.membershipEpoch(),UUID.randomUUID().toString(),"给乙的消息"));
+        chat.send(b.identity(),new SendCommand(view.id(),bob.membershipEpoch(),UUID.randomUUID().toString(),"乙自己的消息"));
+        chat.send(a.identity(),new SendCommand(view.id(),view.membershipEpoch(),UUID.randomUUID().toString(),"另一条消息"));
+        assertThat(chat.summary(b.identity(),view.id()).unreadCount()).isEqualTo("2");
+        assertThat(chat.summary(a.identity(),view.id()).unreadCount()).isEqualTo("1");
+        assertThatThrownBy(()->chat.read(b.identity(),new ReadCommand(view.id(),bob.membershipEpoch(),"1")))
+                .isInstanceOf(AuthException.class).extracting("code").isEqualTo("INVALID_READ");
+        chat.received(b.identity(),new ReceiptCommand(view.id(),bob.membershipEpoch(),"3"));
+        assertThat(chat.summary(b.identity(),view.id()).lastReadSeq()).isEqualTo("0");
+        var token=auth.login(new LoginRequest(b.account(),"Integration-only-password!","another-device"));
+        var second=auth.authenticate("Bearer "+token.accessToken());
+        assertThatThrownBy(()->chat.read(second,new ReadCommand(view.id(),bob.membershipEpoch(),"3")))
+                .isInstanceOf(AuthException.class).extracting("code").isEqualTo("INVALID_READ");
+        chat.received(second,new ReceiptCommand(view.id(),bob.membershipEpoch(),"2"));
+        try(var pool=Executors.newFixedThreadPool(2)) {
+            var gate=new CyclicBarrier(2);
+            var first=pool.submit(()->{gate.await();return chat.read(b.identity(),new ReadCommand(view.id(),bob.membershipEpoch(),"3"));});
+            var other=pool.submit(()->{gate.await();return chat.read(second,new ReadCommand(view.id(),bob.membershipEpoch(),"2"));});
+            first.get(10,TimeUnit.SECONDS);other.get(10,TimeUnit.SECONDS);
+        }
+        assertThat(chat.read(second,new ReadCommand(view.id(),bob.membershipEpoch(),"1")).lastReadSeq()).isEqualTo("3");
+        assertThat(chat.summary(second,view.id()).unreadCount()).isEqualTo("0");
+        assertThat(chat.summary(a.identity(),view.id()).peerLastReadSeq()).isEqualTo("3");
+        assertThat(mapper.receivedSeq(second.userId(),second.deviceId(),Long.parseLong(view.id()),bob.membershipEpoch())).isEqualTo(2);
+        assertThatThrownBy(()->chat.read(outsider.identity(),new ReadCommand(view.id(),bob.membershipEpoch(),"0")))
+                .isInstanceOf(AuthException.class).extracting("code").isEqualTo("NOT_A_MEMBER");
+        assertThatThrownBy(()->chat.read(b.identity(),new ReadCommand(view.id(),UUID.randomUUID().toString(),"3")))
+                .isInstanceOf(AuthException.class).extracting("code").isEqualTo("MEMBERSHIP_CHANGED");
+        assertThatThrownBy(()->chat.read(b.identity(),new ReadCommand(view.id(),bob.membershipEpoch(),"4")))
+                .isInstanceOf(AuthException.class).extracting("code").isEqualTo("INVALID_READ");
+    }
     @Test void outboxFailureRollsBackMessageAndSequenceAndExpiredLeaseCanRecover() throws Exception {
         var a=person();var b=person();var view=conversation(a,b);
         ChatMapper failure=spy(mapper);
         doThrow(new IllegalStateException("injected outbox failure")).when(failure).insertOutbox(anyString(),anyLong(),anyString());
-        var broken=new ChatService(failure,org.mockito.Mockito.mock(AuthMapper.class),auth,new com.fasterxml.jackson.databind.ObjectMapper(),transactions);
+        var broken=new ChatService(failure,org.mockito.Mockito.mock(AuthMapper.class),auth,new com.fasterxml.jackson.databind.ObjectMapper(),transactions,event -> {});
         var command=new SendCommand(view.id(),view.membershipEpoch(),UUID.randomUUID().toString(),"必须原子提交");
         assertThatThrownBy(()->broken.send(a.identity(),command)).isInstanceOf(IllegalStateException.class);
         assertThat(mapper.conversation(Long.parseLong(view.id())).latestSeq()).isZero();

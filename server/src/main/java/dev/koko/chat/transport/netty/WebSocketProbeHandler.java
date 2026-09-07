@@ -80,9 +80,7 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
             switch (type.textValue()) {
                 case "PING" -> reply(context, response("PONG", requestId));
                 case "AUTH" -> authenticate(context, requestId, envelope);
-                case "SEND", "RECEIVED_ACK" -> command(context, requestId, type.textValue(), envelope);
-                case "READ" -> error(context, requestId, identity == null ? "UNAUTHENTICATED" : "NOT_IMPLEMENTED",
-                        identity == null ? "Authenticate first" : "Read receipts are not implemented yet");
+                case "SEND", "RECEIVED_ACK", "READ" -> command(context, requestId, type.textValue(), envelope);
                 default -> error(context, requestId, "NOT_IMPLEMENTED", "Command is not implemented in this skeleton");
             }
         } catch (JsonProcessingException exception) {
@@ -140,6 +138,9 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
                     if(type.equals("SEND")) {
                         var sent=authentication.send(identity,new SendCommand(field(envelope,"conversationId"),field(envelope,"membershipEpoch"),field(envelope,"clientMsgId"),field(envelope,"text")));
                         result=response("SEND_ACK",requestId);result.set("message",mapper.valueToTree(sent));
+                    } else if(type.equals("READ")) {
+                        var summary=authentication.read(identity,new ReadCommand(field(envelope,"conversationId"),field(envelope,"membershipEpoch"),field(envelope,"readSeq")));
+                        result=response("READ_ACK",requestId);result.set("conversation",mapper.valueToTree(summary));
                     } else {
                         authentication.received(identity,new ReceiptCommand(field(envelope,"conversationId"),field(envelope,"membershipEpoch"),field(envelope,"receivedSeq")));
                         result=response("RECEIVED_ACK_OK",requestId);

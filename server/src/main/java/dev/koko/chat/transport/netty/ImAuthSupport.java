@@ -40,6 +40,7 @@ public class ImAuthSupport {
     }
     public MessageView send(Identity identity,SendCommand command) { return chat.send(identity,command); }
     public void received(Identity identity,ReceiptCommand command) { chat.received(identity,command); }
+    public ConversationView read(Identity identity,ReadCommand command) { return chat.read(identity,command); }
     public boolean contains(Identity identity) { Channel channel=channels.get(identity.sessionId());return channel!=null && channel.isActive(); }
     public CompletableFuture<Void> deliver(Identity identity,String json) {
         var result=new CompletableFuture<Void>();Channel channel=channels.get(identity.sessionId());

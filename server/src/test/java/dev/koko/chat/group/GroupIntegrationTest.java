@@ -69,11 +69,20 @@ class GroupIntegrationTest {
         assertThat(chat.history(b.identity(),id,"0",null,50).visibleFromSeq()).isEqualTo("2");
         send(owner,id,"入群后可见");
         assertThat(chat.history(b.identity(),id,"0",null,50).messages()).extracting(MessageView::seq).containsExactly("2");
+        assertThat(chat.summary(b.identity(),id).lastReadSeq()).isEqualTo("1");
+        assertThat(chat.summary(b.identity(),id).unreadCount()).isEqualTo("1");
+        chat.received(a.identity(),new ReceiptCommand(id,oldEpoch,"2"));
+        chat.read(a.identity(),new ReadCommand(id,oldEpoch,"2"));
+        assertThat(chat.summary(a.identity(),id).peerLastReadSeq()).isNull();
         var removal=new Change(command(),ownerEpoch,oldEpoch);
         groups.remove(owner.identity(),id,a.id(),removal);
         assertThatThrownBy(()->chat.send(a.identity(),new SendCommand(id,oldEpoch,command(),"已被移除"))).isInstanceOf(AuthException.class);
         assertThatThrownBy(()->chat.history(a.identity(),id,"0",null,50)).isInstanceOf(AuthException.class);
         groups.invite(owner.identity(),id,new Invite(command(),ownerEpoch,List.of(a.id())));
+        assertThatThrownBy(()->chat.read(a.identity(),new ReadCommand(id,oldEpoch,"2")))
+                .isInstanceOf(AuthException.class).extracting("code").isEqualTo("MEMBERSHIP_CHANGED");
+        assertThat(chat.summary(a.identity(),id).unreadCount()).isEqualTo("0");
+        assertThat(chat.summary(a.identity(),id).lastReadSeq()).isEqualTo("2");
         String newEpoch=epoch(a,id);assertThat(newEpoch).isNotEqualTo(oldEpoch);
         assertThat(chat.history(a.identity(),id,"0",null,50).visibleFromSeq()).isEqualTo("3");
         // 已成功移除的旧命令不能在成员重新入群后再次生效。

@@ -22,8 +22,9 @@ public class ChatService {
     private final AuthService auth;
     private final ObjectMapper json;
     private final TransactionTemplate tx;
-    public ChatService(ChatMapper mapper,AuthMapper users,AuthService auth,ObjectMapper json,PlatformTransactionManager transactions) {
-        this.mapper=mapper;this.users=users;this.auth=auth;this.json=json;
+    private final org.springframework.context.ApplicationEventPublisher events;
+    public ChatService(ChatMapper mapper,AuthMapper users,AuthService auth,ObjectMapper json,PlatformTransactionManager transactions,org.springframework.context.ApplicationEventPublisher events) {
+        this.mapper=mapper;this.users=users;this.auth=auth;this.json=json;this.events=events;
         tx=new TransactionTemplate(transactions);tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
     public ConversationView createDirect(Identity identity,String account) {
@@ -117,6 +118,24 @@ public class ChatService {
             var chat=mapper.lockConversation(id);var member=member(identity,id,command.membershipEpoch());
             if(seq<member.joinSeq()-1 || seq>chat.latestSeq()) invalid();
             mapper.receipt(identity.userId(),identity.deviceId(),id,member.membershipEpoch(),seq);
+        });
+    }
+    /** 读进度只在当前设备已确认的连续范围内推进，与退群、重入共用会话行锁。 */
+    public ConversationView read(Identity identity,ReadCommand command) {
+        requireActive(identity);long id=number(command.conversationId(),false),seq=number(command.readSeq(),true);
+        if(command.membershipEpoch()==null || !command.membershipEpoch().matches("[a-f0-9-]{36}")) invalid();
+        return tx.execute(status -> {
+            var conversation=mapper.lockConversation(id);var member=member(identity,id,command.membershipEpoch());
+            Long received=mapper.receivedSeq(identity.userId(),identity.deviceId(),id,member.membershipEpoch());
+            long upper=received==null?member.joinSeq()-1:received;
+            if(seq<member.joinSeq()-1 || seq>conversation.latestSeq() || seq>upper)
+                throw new AuthException(400,"INVALID_READ","已读进度不能超过当前设备已接收的连续位置");
+            if(seq>member.lastReadSeq()) {
+                mapper.read(identity.userId(),id,member.membershipEpoch(),seq);
+                // AFTER_COMMIT 监听器发送提示，失败不回滚数据库事实，快照同步负责补齐。
+                events.publishEvent(new ReadChanged(id,identity.userId(),member.membershipEpoch()));
+            }
+            return mapper.summary(id,identity.userId());
         });
     }
     public MemberRow member(Identity identity,long id,String epoch) {

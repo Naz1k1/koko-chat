@@ -10,9 +10,10 @@ public final class ChatModels {
     private ChatModels() {}
     public record DirectRequest(@NotBlank @Pattern(regexp="[A-Za-z0-9_]{3,32}") String account) {}
     public record ConversationRow(long id, long latestSeq, String status, String type) {}
-    public record MemberRow(long conversationId, long userId, String membershipEpoch, long joinSeq, String status) {}
+    public record MemberRow(long conversationId, long userId, String membershipEpoch, long joinSeq, String status, long lastReadSeq) {}
     public record ConversationView(String id, String peerId, String account, String nickname,
-            String membershipEpoch, String visibleFromSeq, String latestSeq, String type, String ownerId) {}
+            String membershipEpoch, String visibleFromSeq, String latestSeq, String type, String ownerId,
+            String lastReadSeq, String unreadCount, String peerLastReadSeq) {}
     public record ConversationPage(List<ConversationView> conversations, String nextCursor, boolean hasMore) {}
     public record MessageRow(long id, long conversationId, long seq, long senderId, String senderMembershipEpoch,
             String clientMsgId, String type, String text, byte[] bodyHash, LocalDateTime serverTime) {}
@@ -22,6 +23,9 @@ public final class ChatModels {
             String toSeq, String nextCursor, boolean hasMore) {}
     public record SendCommand(String conversationId, String membershipEpoch, String clientMsgId, String text) {}
     public record ReceiptCommand(String conversationId, String membershipEpoch, String receivedSeq) {}
+    /** READ 是用户共享进度；接收确认仍属于当前设备。 */
+    public record ReadCommand(String conversationId, String membershipEpoch, String readSeq) {}
+    public record ReadChanged(long conversationId, long userId, String membershipEpoch) {}
     public record MessageEvent(int eventVersion, String eventType, String eventId, String messageId,
             String conversationId, String seq, int attempt, String recipientUserId, String recipientDeviceId) {
         public MessageEvent(int version,String type,String event,String message,String conversation,String seq,int attempt) {

@@ -48,7 +48,12 @@ public class DeliveryConsumers {
     @RabbitListener(id="chatGateway",queues="#{gatewayQueue.name}",concurrency="1")
     public void gateway(Message raw,Channel channel) throws Exception {
         long tag=raw.getMessageProperties().getDeliveryTag();GatewayTask task;
-        try { task=json.readValue(raw.getBody(),GatewayTask.class);validate(task.event());if(task.target()==null) throw new IllegalArgumentException(); }
+        try {
+            // 两类通知共用网关有界队列；已读提示没有聊天消息的重试/死信责任。
+            if("READ_UPDATE".equals(json.readTree(raw.getBody()).path("type").asText())) {
+                readUpdate(raw,channel,tag);return;
+            }
+            task=json.readValue(raw.getBody(),GatewayTask.class);validate(task.event());if(task.target()==null) throw new IllegalArgumentException(); }
         catch(Exception bad) { transferOrRequeue(raw,channel,tag,null);return; }
         try {
             var target=task.target();var identity=new Identity(target.sessionId(),target.userId(),target.deviceId());
@@ -67,6 +72,22 @@ public class DeliveryConsumers {
         } catch(Exception failure) {
             transferOrRequeue(raw,channel,tag,task.event().retry(Long.toString(task.target().userId()),task.target().deviceId()));
         }
+    }
+    private void readUpdate(Message raw,Channel channel,long tag) throws Exception {
+        try {
+            var task=json.readValue(raw.getBody(),ReadNotifications.ReadTask.class);var target=task.target();
+            var identity=new Identity(target.sessionId(),target.userId(),target.deviceId());
+            if(topology.route().equals(target.gateway()) && connections.contains(identity) && connections.active(identity)) {
+                var summary=chat.summary(identity,task.conversationId());
+                if(summary.membershipEpoch().equals(task.membershipEpoch())) {
+                    // 重新读取权威快照，避免乱序提示把旧读位置覆盖到客户端。
+                    String payload=json.createObjectNode().put("v",1).put("type","READ_UPDATE")
+                            .set("conversation",json.valueToTree(summary)).toString();
+                    connections.deliver(identity,payload).get(3,TimeUnit.SECONDS);
+                }
+            }
+        } catch(Exception unavailable) { log.debug("已读提示由后续快照补齐"); }
+        channel.basicAck(tag,false);
     }
     private void validate(MessageEvent event) {
         if(event==null || event.eventVersion()!=1 || !"message.created".equals(event.eventType()) || event.attempt()<0 || event.attempt()>100
