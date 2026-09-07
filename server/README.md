@@ -1,6 +1,6 @@
 # koko-chat 后端
 
-Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包，采用 Controller / Handler → Service → Mapper；已实现系统探针、注册登录、令牌会话与 Netty 票据认证；聊天与 MQ 消费者尚未实现。
+Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包，采用 Controller / Handler → Service → Mapper；已实现系统探针、注册登录、令牌会话与 Netty 票据认证、单聊持久化、历史分页、设备回执及 RabbitMQ 两级分发。
 
 ## 构建与默认启动
 
@@ -13,7 +13,7 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 
 也可执行 `java -jar target/koko-chat-server-0.1.0-SNAPSHOT.jar`。默认 `skeleton` profile 不创建 MySQL、Redis、RabbitMQ 客户端，因此无需启动中间件。
 
-- `GET http://127.0.0.1:8080/api/system/info`：`{name, version, stage, httpPort, imPort, imPath}`，`stage` 在默认模式为 `skeleton`，`local` 为 `authentication`。
+- `GET http://127.0.0.1:8080/api/system/info`：`{name, version, stage, httpPort, imPort, imPath}`，`stage` 在默认模式为 `skeleton`，`local` 为 `direct-chat`。
 - `GET http://127.0.0.1:8080/actuator/health`：进程及 Netty 正常时返回 `{"status":"UP"}`。
 - `ws://127.0.0.1:8081/im`：WebSocket 握手、控制帧 PING/PONG、JSON v1 应用心跳。TLS 由后续部署入口终止，本地骨架使用 HTTP / WS。
 
@@ -21,7 +21,7 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 
 响应：`{"v":1,"type":"PONG","requestId":"probe-1","serverTime":"UTC ISO-8601"}`。
 
-默认骨架模式的 `AUTH` 返回 `NOT_IMPLEMENTED`。`local` 模式使用一次性 Redis 票据，成功返回 `AUTH_OK`；未认证的消息命令返回 `UNAUTHENTICATED`，认证后仍返回 `NOT_IMPLEMENTED`，消息保存确认尚未实现。错误响应字段为 `v/type/requestId?/serverTime/code/message`。
+默认骨架模式的 `AUTH` 返回 `NOT_IMPLEMENTED`。`local` 模式使用一次性 Redis 票据，成功返回 `AUTH_OK`；未认证的消息命令返回 `UNAUTHENTICATED`，认证后支持 `SEND` / `SEND_ACK`、`MESSAGE` 和 `RECEIVED_ACK`；`READ` 尚未实现。单聊接口见 [聊天契约](../contracts/chat.md)。错误响应字段为 `v/type/requestId?/serverTime/code/message`。
 
 单帧和完整聚合消息均限制为 16 KiB；只接收 JSON 文本。握手后未认证连接在 30 秒关闭，PING 不延长认证期限；读空闲 75 秒关闭。Netty EventLoop 仅做轻量协议解析；票据验证和会话有效性查询通过有界 `imBusinessExecutor` 执行，过载关闭 1013，防止阻塞 Netty 事件循环。
 

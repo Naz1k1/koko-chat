@@ -1,6 +1,6 @@
 # koko-chat 桌面端
 
-Kotlin/JVM 21 + Compose Desktop 桌面客户端。已接入中文注册/登录界面、令牌刷新、WebSocket 票据认证、心跳、断线重连与退出清理；联系人、聊天收发、同步及托盘尚未实现。HTTP 检查成功不会被显示为 IM 在线。
+Kotlin/JVM 21 + Compose Desktop 桌面客户端。已接入中文注册/登录界面、令牌刷新、WebSocket 票据认证、心跳、断线重连与退出清理，以及准确账号发起单聊、文本收发、待发送重试和离线同步；联系人、群聊、已读与托盘尚未实现。HTTP 检查成功不会被显示为 IM 在线。
 
 ## 启动与验证
 
@@ -24,16 +24,16 @@ Kotlin/JVM 21 + Compose Desktop 桌面客户端。已接入中文注册/登录�
 KOKO_CHAT_TEST_API_BASE=http://127.0.0.1:8080 ./gradlew test --tests dev.koko.chat.desktop.LiveServiceProbeTest --rerun-tasks
 ```
 
-该测试验证真实 HTTP 链路。另有 Compose 离屏渲染检查，覆盖登录、注册切换以及 1120×760 / 960×640 窗口布局；尚未在系统窗口中自动执行键盘、焦点和窗口关闭操作。
+该测试验证真实 HTTP 链路。另有 Compose 离屏渲染检查，覆盖登录、注册切换、聊天工作区以及 1120×760 / 960×640 窗口布局；尚未在系统窗口中自动执行键盘、焦点和窗口关闭操作。
 
-数据库只存服务地址和设备 UUID，默认位于当前用户的应用数据目录：macOS `~/Library/Application Support/koko-chat`，Windows `%APPDATA%/koko-chat`，Linux `$XDG_DATA_HOME/koko-chat`（未设置则为 `~/.local/share/koko-chat`）。设置环境变量 `KOKO_CHAT_DATA_DIR` 可覆盖目录，便于测试；不要指向仓库的源代码目录。
+设置库保存服务地址和设备 UUID；`accounts/` 下按服务地址与用户 ID 的 SHA-256 分文件保存会话、消息和待发送记录。缓存未加密，注销只清除页面和凭证，保留本机历史供下次登录恢复。数据默认位于当前用户的应用数据目录：macOS `~/Library/Application Support/koko-chat`，Windows `%APPDATA%/koko-chat`，Linux `$XDG_DATA_HOME/koko-chat`（未设置则为 `~/.local/share/koko-chat`）。设置环境变量 `KOKO_CHAT_DATA_DIR` 可覆盖目录，便于测试；不要指向仓库的源代码目录。
 
 ## 实现边界
 
 - `AppRuntime` 在 Compose 之外创建，拥有应用作用域、Ktor 与 SQLite IO 执行器。
 - `DesktopScreenModel` 是普通 Kotlin 类，以 `StateFlow` 发布页面状态；同一时间只执行一次服务检查。
 - `SessionManager` 管理单一账号连接循环，以 1/2/4/8/16/30 秒间隔重连；只在收到并核对 AUTH_OK 后显示在线。临近过期的访问令牌在申请新票据前串行刷新，刷新结果不明确则要求重新登录。
-- SQLite 使用 SQLDelight 生成 schema/query，只持久化 `app_preferences`，未提前创建账号消息缓存。
+- SQLite 使用 SQLDelight 生成 schema/query，设置库与账号消息库分别生成 schema/query。消息事务落盘后才报告连续接收游标；乱序消息先保存，填平缺口后再推进。
 - 修改服务地址会先退出账号；关闭窗口会取消页面任务、关闭 IM 连接、尝试服务端注销并清空内存凭证，再关闭网络和数据库。断网时会提示撤销未确认。当前没有“关闭到托盘”。
 
 ## 锁定版本与分发
