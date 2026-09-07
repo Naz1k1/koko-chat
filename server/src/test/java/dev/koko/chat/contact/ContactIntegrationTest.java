@@ -116,6 +116,8 @@ class ContactIntegrationTest {
                 new HttpEntity<>(new CreateRequest(b.account(), "x".repeat(256)), headers), String.class).getStatusCode().value()).isEqualTo(400);
         assertThat(http.exchange("/api/friends?afterId=-1", HttpMethod.GET,
                 new HttpEntity<>(headers), String.class).getStatusCode().value()).isEqualTo(400);
+        assertThat(http.exchange("/api/friends?limit=abc", HttpMethod.GET,
+                new HttpEntity<>(headers), String.class).getStatusCode().value()).isEqualTo(400);
         assertThat(http.exchange("/api/friend-requests?direction=invalid", HttpMethod.GET,
                 new HttpEntity<>(headers), String.class).getStatusCode().value()).isEqualTo(400);
     }

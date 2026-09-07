@@ -10,6 +10,7 @@ import dev.koko.chat.desktop.presentation.DesktopScreenModel
 import dev.koko.chat.desktop.ui.DesktopApp
 import dev.koko.chat.desktop.ui.ChatWorkspace
 import dev.koko.chat.desktop.chat.ChatUiState
+import dev.koko.chat.desktop.contact.ContactUiState
 import dev.koko.chat.desktop.session.*
 import dev.koko.chat.desktop.data.ChatStore
 import androidx.compose.material3.*
@@ -65,16 +66,32 @@ class DesktopRenderTest {
                 val chat=ChatUiState(listOf(conversation),"10",messages,
                     listOf(ChatStore.Pending("p3","10","preview-epoch","这条消息正在等待服务端确认。","PENDING",null)),
                     "消息已同步")
+                val incoming=FriendRequestInfo("31","3","1","luming","陆鸣","yako","Yako",
+                    "你好，我也在学习 Kotlin 和 Netty，想一起交流这个项目。","PENDING","2026-09-08T00:00:00Z")
+                val outgoing=FriendRequestInfo("32","1","4","yako","Yako","xiaolin","小林",
+                    "一起交流开发经验吧。","REJECTED","2026-09-08T00:00:00Z","2026-09-08T00:01:00Z")
+                val contacts=ContactUiState(listOf(FriendInfo("2","xiaoyu","小雨")),listOf(incoming,outgoing),loading=false,notice="联系人已同步")
                 for ((width,height) in listOf(1120 to 760,960 to 640)) {
                     val scene=ImageComposeScene(width=width,height=height,coroutineContext=coroutineContext)
                     try {
                         scene.setContent {
                             MaterialTheme(colorScheme=lightColorScheme(primary=Color(0xFF167565),background=Color(0xFFF6F8F6),surface=Color.White)) {
-                                ChatWorkspace(session,chat,false,model)
+                                ChatWorkspace(session,chat,false,model,contacts)
                             }
                         }
                         scene.render().close();delay(100)
                         scene.render().use { image -> image.encodeToData()!!.use { data -> Files.write(directory.resolve("chat-$width.png"),data.bytes) } }
+                        for ((label,file) in listOf("联系人 · 1" to "friends", "收到的申请 1" to "incoming", "发出的申请" to "outgoing")) {
+                            val target=scene.semanticsOwners.asSequence().flatMap { flatten(it.rootSemanticsNode) }.firstOrNull { node ->
+                                node.config.getOrNull(SemanticsActions.OnClick)!=null && flatten(node).any {
+                                    it.config.getOrNull(SemanticsProperties.Text)?.any { text -> text.text==label }==true
+                                }
+                            }
+                            assertNotNull(target,"应能找到入口：$label")
+                            assertTrue(target.config[SemanticsActions.OnClick].action!!.invoke())
+                            scene.render().close();delay(100)
+                            scene.render().use { image -> image.encodeToData()!!.use { data -> Files.write(directory.resolve("contacts-$file-$width.png"),data.bytes) } }
+                        }
                     } finally { scene.close() }
                 }
             } finally { model.close(); store.close() }

@@ -17,7 +17,7 @@ public class ApiExceptionHandler {
     ResponseEntity<ApiError> business(AuthException error) {
         return ResponseEntity.status(error.status()).body(new ApiError(error.code(), error.getMessage()));
     }
-    @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class})
+    @ExceptionHandler({MethodArgumentNotValidException.class, HttpMessageNotReadableException.class, org.springframework.web.method.annotation.MethodArgumentTypeMismatchException.class})
     ResponseEntity<ApiError> invalid(Exception error) {
         return ResponseEntity.badRequest().body(new ApiError("INVALID_REQUEST", "请检查请求字段格式"));
     }
