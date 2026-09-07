@@ -80,7 +80,7 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
             switch (type.textValue()) {
                 case "PING" -> reply(context, response("PONG", requestId));
                 case "AUTH" -> authenticate(context, requestId, envelope);
-                case "SEND", "RECEIVED_ACK", "READ" -> command(context, requestId, type.textValue(), envelope);
+                case "SEND", "RECEIVED_ACK", "READ", "CALL" -> command(context, requestId, type.textValue(), envelope);
                 default -> error(context, requestId, "NOT_IMPLEMENTED", "Command is not implemented in this skeleton");
             }
         } catch (JsonProcessingException exception) {
@@ -135,7 +135,9 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
             authentication.execute(() -> {
                 ObjectNode result;
                 try {
-                    if(type.equals("SEND")) {
+                    if(type.equals("CALL")) {
+                        result=response("CALL_ACK",requestId);result.set("snapshot",mapper.valueToTree(authentication.call(identity,envelope)));
+                    } else if(type.equals("SEND")) {
                         var sent=authentication.send(identity,new SendCommand(field(envelope,"conversationId"),field(envelope,"membershipEpoch"),field(envelope,"clientMsgId"),field(envelope,"text"),field(envelope,"attachmentId")));
                         result=response("SEND_ACK",requestId);result.set("message",mapper.valueToTree(sent));
                     } else if(type.equals("READ")) {

@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import static dev.koko.chat.auth.AuthModels.*;
 
 /** 错误响应不回显输入值，防止校验异常把密码或令牌泄露到响应及日志。 */
-@RestControllerAdvice(basePackages = {"dev.koko.chat.auth", "dev.koko.chat.message", "dev.koko.chat.contact", "dev.koko.chat.group", "dev.koko.chat.attachment"})
+@RestControllerAdvice(basePackages = {"dev.koko.chat.auth", "dev.koko.chat.message", "dev.koko.chat.contact", "dev.koko.chat.group", "dev.koko.chat.attachment","dev.koko.chat.call"})
 public class ApiExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(ApiExceptionHandler.class);
     @ExceptionHandler(AuthException.class)

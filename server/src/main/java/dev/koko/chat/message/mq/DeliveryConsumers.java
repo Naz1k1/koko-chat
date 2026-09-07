@@ -50,6 +50,15 @@ public class DeliveryConsumers {
         long tag=raw.getMessageProperties().getDeliveryTag();GatewayTask task;
         try {
             // 两类通知共用网关有界队列；已读提示没有聊天消息的重试/死信责任。
+            if("CALL_CHANGED".equals(json.readTree(raw.getBody()).path("type").asText())) {
+                try {
+                    var hint=json.readValue(raw.getBody(),dev.koko.chat.call.CallNotifications.Task.class);var route=hint.target();
+                    var identity=new Identity(route.sessionId(),route.userId(),route.deviceId());
+                    if(topology.route().equals(route.gateway()) && connections.contains(identity) && connections.active(identity))
+                        connections.deliver(identity,json.createObjectNode().put("v",1).put("type","CALL_CHANGED").toString()).get(3,TimeUnit.SECONDS);
+                } catch(Exception ignored) { /* 后续快照补齐。 */ }
+                channel.basicAck(tag,false);return;
+            }
             if("READ_UPDATE".equals(json.readTree(raw.getBody()).path("type").asText())) {
                 readUpdate(raw,channel,tag);return;
             }

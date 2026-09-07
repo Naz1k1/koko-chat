@@ -26,9 +26,10 @@ public class ImAuthSupport {
     private final TaskExecutor executor;
     private final ChatService chat;
     private final OnlineRoutes routes;
+    private final dev.koko.chat.call.CallService calls;
     private final ConcurrentHashMap<String,Channel> channels=new ConcurrentHashMap<>();
-    public ImAuthSupport(ImTicketService tickets, AuthService auth, @Qualifier("imBusinessExecutor") TaskExecutor executor, ChatService chat, OnlineRoutes routes) {
-        this.tickets=tickets;this.auth=auth;this.executor=executor;this.chat=chat;this.routes=routes;
+    public ImAuthSupport(ImTicketService tickets, AuthService auth, @Qualifier("imBusinessExecutor") TaskExecutor executor, ChatService chat, OnlineRoutes routes, dev.koko.chat.call.CallService calls) {
+        this.tickets=tickets;this.auth=auth;this.executor=executor;this.chat=chat;this.routes=routes;this.calls=calls;
     }
     public void execute(Runnable task) { executor.execute(task); }
     public Identity authenticate(String ticket) { return tickets.consume(ticket); }
@@ -38,6 +39,7 @@ public class ImAuthSupport {
         if(contains(identity)) routes.touch(identity);
         return true;
     }
+    public dev.koko.chat.call.CallModels.Snapshot call(Identity identity,com.fasterxml.jackson.databind.JsonNode command) { return calls.command(identity,command); }
     public MessageView send(Identity identity,SendCommand command) { return chat.send(identity,command); }
     public void received(Identity identity,ReceiptCommand command) { chat.received(identity,command); }
     public ConversationView read(Identity identity,ReadCommand command) { return chat.read(identity,command); }
