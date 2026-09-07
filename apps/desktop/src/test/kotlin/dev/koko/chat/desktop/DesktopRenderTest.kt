@@ -42,7 +42,7 @@ class DesktopRenderTest {
                     val scene = ImageComposeScene(width = width, height = height, coroutineContext = coroutineContext)
                     try {
                         scene.setContent { DesktopApp(model, false) }
-                        scene.render().close()
+                        scene.render(System.nanoTime()).close()
                         if (register) {
                             val button = scene.semanticsOwners.asSequence().flatMap { flatten(it.rootSemanticsNode) }
                                 .firstOrNull { node -> node.config.getOrNull(SemanticsActions.OnClick) != null &&
@@ -51,7 +51,7 @@ class DesktopRenderTest {
                             assertTrue(button.config[SemanticsActions.OnClick].action!!.invoke())
                             delay(30)
                         }
-                        scene.render().use { image ->
+                        scene.render(System.nanoTime()).use { image ->
                             image.encodeToData()!!.use { data ->
                                 Files.write(directory.resolve("${if(register) "register" else "login"}-$width.png"), data.bytes)
                             }
@@ -80,8 +80,8 @@ class DesktopRenderTest {
                                 ChatWorkspace(session,chat,false,model,contacts)
                             }
                         }
-                        scene.render().close();delay(100)
-                        scene.render().use { image -> image.encodeToData()!!.use { data -> Files.write(directory.resolve("chat-$width.png"),data.bytes) } }
+                        scene.render(System.nanoTime()).close();delay(100)
+                        scene.render(System.nanoTime()).use { image -> image.encodeToData()!!.use { data -> Files.write(directory.resolve("chat-$width.png"),data.bytes) } }
                         for ((label,file) in listOf("联系人 · 1" to "friends", "收到的申请 1" to "incoming", "发出的申请" to "outgoing")) {
                             val target=scene.semanticsOwners.asSequence().flatMap { flatten(it.rootSemanticsNode) }.firstOrNull { node ->
                                 node.config.getOrNull(SemanticsActions.OnClick)!=null && flatten(node).any {
@@ -90,8 +90,8 @@ class DesktopRenderTest {
                             }
                             assertNotNull(target,"应能找到入口：$label")
                             assertTrue(target.config[SemanticsActions.OnClick].action!!.invoke())
-                            scene.render().close();delay(100)
-                            scene.render().use { image -> image.encodeToData()!!.use { data -> Files.write(directory.resolve("contacts-$file-$width.png"),data.bytes) } }
+                            scene.render(System.nanoTime()).close();delay(100)
+                            scene.render(System.nanoTime()).use { image -> image.encodeToData()!!.use { data -> Files.write(directory.resolve("contacts-$file-$width.png"),data.bytes) } }
                         }
                     } finally { scene.close() }
                 }
@@ -111,12 +111,50 @@ class DesktopRenderTest {
                                     ChatWorkspace(session,groupChat,false,model,groupContacts,GroupUiState(detail=groupDetail,dialog=mode))
                                 }
                             }
-                            scene.render().close();delay(100)
-                            scene.render().use { image -> image.encodeToData()!!.use { data -> Files.write(directory.resolve("group-$file-$width.png"),data.bytes) } }
+                            scene.render(System.nanoTime()).close();delay(100)
+                            scene.render(System.nanoTime()).use { image -> image.encodeToData()!!.use { data -> Files.write(directory.resolve("group-$file-$width.png"),data.bytes) } }
                         } finally { scene.close() }
                     }
                 }
             } finally { model.close(); store.close() }
+        }
+    }
+    @Test fun `render attachment messages and image preview in actual workspace`() {
+        val output=System.getenv("KOKO_CHAT_RENDER_DIR");assumeTrue(!output.isNullOrEmpty())
+        runBlocking(Dispatchers.Main) {
+            val directory=Path.of(output!!);Files.createDirectories(directory)
+            val store=PreferencesStore(directory.resolve("attachment-preview-settings.db"),Dispatchers.IO)
+            val model=DesktopScreenModel(this,store,object:ServiceProbe { override suspend fun check(settings:ServiceSettings)=error("No network in render fixture") })
+            val artwork=java.awt.image.BufferedImage(480,260,java.awt.image.BufferedImage.TYPE_INT_RGB)
+            val graphics=artwork.createGraphics()
+            try {
+                graphics.color=java.awt.Color(0xDB,0xED,0xE3);graphics.fillRect(0,0,480,260)
+                graphics.color=java.awt.Color(0x16,0x75,0x65);graphics.fillRoundRect(60,60,360,140,36,36)
+                graphics.color=java.awt.Color.WHITE;graphics.font=java.awt.Font("SansSerif",java.awt.Font.BOLD,36);graphics.drawString("koko-chat",143,143)
+            } finally { graphics.dispose() }
+            val encoded=java.io.ByteArrayOutputStream();javax.imageio.ImageIO.write(artwork,"png",encoded);val bytes=encoded.toByteArray()
+            val file=AttachmentReference("file-id","项目说明.pdf",32768,"hash","FILE","application/octet-stream")
+            val picture=AttachmentReference("image-id","一起完善聊天工具.png",bytes.size.toLong(),fileHash(bytes),"IMAGE","image/png")
+            val info=ConversationInfo("10","2","xiaoyu","小雨","preview-epoch","1","2")
+            val session=SessionUiState(SessionState.ONLINE,UserProfile("1","yako","Yako"),"IM 在线","preview-session")
+            val messages=listOf(ChatMessage("101","10","1","2","f1","FILE","[文件] 项目说明.pdf","2026-09-08T00:00:00Z",file),
+                ChatMessage("102","10","2","1","f2","IMAGE","[图片] 一起完善聊天工具.png","2026-09-08T00:00:00Z",picture))
+            try {
+                model.state.first { it.initialized }
+                for((width,height) in listOf(1120 to 760,960 to 640)) for(preview in listOf(false,true)) {
+                    val scene=ImageComposeScene(width=width,height=height,coroutineContext=coroutineContext)
+                    try {
+                        scene.setContent { MaterialTheme(colorScheme=lightColorScheme(primary=Color(0xFF167565))) {
+                            ChatWorkspace(session,ChatUiState(listOf(info),"10",messages,notice="消息已同步",preview=if(preview) dev.koko.chat.desktop.chat.AttachmentPreview(picture,bytes) else null),false,model)
+                        } }
+                        // render 默认时间为 0；显式推进动画帧后再截图，避免捕获半透明的中间状态。
+                        repeat(24) { scene.render(System.nanoTime()).close();delay(16) }
+                        val labels=scene.semanticsOwners.asSequence().flatMap { flatten(it.rootSemanticsNode) }.flatMap { it.config.getOrNull(SemanticsProperties.Text).orEmpty().asSequence() }.map { it.text }.toList()
+                        assertTrue(if(preview) "关闭" in labels else "查看图片" in labels && "保存文件" in labels && "图片" in labels && "文件" in labels)
+                        scene.render(System.nanoTime()).use { image -> image.encodeToData()!!.use { Files.write(directory.resolve("attachment-${if(preview) "preview" else "chat"}-$width.png"),it.bytes) } }
+                    } finally { scene.close() }
+                }
+            } finally { model.close();store.close() }
         }
     }
     private fun flatten(node: SemanticsNode): Sequence<SemanticsNode> = sequence {

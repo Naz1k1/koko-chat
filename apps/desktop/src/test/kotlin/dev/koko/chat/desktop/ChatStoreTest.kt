@@ -91,13 +91,36 @@ class ChatStoreTest {
             val file=java.nio.file.Files.list(temp.root.toPath()).use { it.filter { path -> path.toString().endsWith(".db") }.findFirst().orElseThrow() }
             // 恢复升级前真实的 v1 表结构与 user_version，再通过生产驱动打开迁移。
             java.sql.DriverManager.getConnection("jdbc:sqlite:$file").use { connection ->
-                connection.createStatement().use { statement -> statement.execute("DROP TABLE pending_read");statement.execute("PRAGMA user_version=1") }
+                connection.createStatement().use { statement -> statement.execute("DROP TABLE pending_read");statement.execute("DROP TABLE pending_upload");statement.execute("ALTER TABLE pending_message DROP COLUMN attachment_id");statement.execute("PRAGMA user_version=1") }
             }
             store=ChatStore(temp.root.toPath(),"http://localhost","1",dispatcher)
             assertEquals("旧缓存",store.messages(info).single().text)
             store.markRead("10","epoch-1",1)
             assertEquals(1,store.pendingReads().single().seq)
             assertEquals(1,store.cursor("10"))
+        } finally { store.close();dispatcher.close() }
+    }
+
+    @Test fun `attachment copy survives restart and source deletion until own acknowledgement`():Unit = runBlocking {
+        val dispatcher=Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+        var store=ChatStore(temp.root.toPath(),"http://localhost","1",dispatcher)
+        val info=ConversationInfo("10","2","bob","小波","epoch-1","1","2")
+        val source=temp.root.toPath().resolve("测试文件.bin");val bytes=ByteArray(16384) { (it%127).toByte() }
+        java.nio.file.Files.write(source,bytes)
+        try {
+            store.saveConversations(listOf(info));val id=store.enqueueFile(info,source,"FILE")
+            java.nio.file.Files.delete(source);store.close();store=ChatStore(temp.root.toPath(),"http://localhost","1",dispatcher)
+            assertEquals(id,store.pending().single().attachmentId);assertContentEquals(bytes,store.upload(id).bytes)
+            val peer=ChatMessage("101","10","1","2",id,"TEXT","对方碰巧使用同编号","2026-09-08T00:00:00Z")
+            store.saveMessages("10","epoch-1",listOf(peer));assertContentEquals(bytes,store.upload(id).bytes)
+            val metadata=store.upload(id).metadata
+            val own=peer.copy(id="102",seq="2",senderId="1",type="FILE",attachment=AttachmentReference(id,metadata.name,metadata.size,metadata.sha256,"FILE","application/octet-stream"))
+            store.saveMessages("10","epoch-1",listOf(own));assertTrue(store.pending().isEmpty())
+            assertEquals(0,java.nio.file.Files.walk(temp.root.toPath()).use { it.filter { file -> file.toString().endsWith(".upload") }.count() })
+            java.nio.file.Files.write(source,bytes);val stale=store.enqueueFile(info,source,"FILE")
+            store.saveConversations(listOf(info.copy(membershipEpoch="epoch-2",visibleFromSeq="3")))
+            store.retry(stale,false,null);assertEquals("FAILED",store.pending().single().status)
+            assertContentEquals(bytes,store.upload(stale).bytes)
         } finally { store.close();dispatcher.close() }
     }
 
