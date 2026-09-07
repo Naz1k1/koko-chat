@@ -1,6 +1,6 @@
 # koko-chat 后端
 
-Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包，采用 Controller / Handler → Service → Mapper；已实现系统探针、注册登录、令牌会话与 Netty 票据认证、单聊持久化、历史分页、设备回执及 RabbitMQ 两级分发。
+Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包，采用 Controller / Handler → Service → Mapper；已实现系统探针、注册登录、令牌会话与 Netty 票据认证、单聊持久化、历史分页、设备回执及 RabbitMQ 两级分发，以及好友申请/接受/拒绝与双向联系人关系。
 
 ## 构建与默认启动
 
@@ -13,7 +13,7 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 
 也可执行 `java -jar target/koko-chat-server-0.1.0-SNAPSHOT.jar`。默认 `skeleton` profile 不创建 MySQL、Redis、RabbitMQ 客户端，因此无需启动中间件。
 
-- `GET http://127.0.0.1:8080/api/system/info`：`{name, version, stage, httpPort, imPort, imPath}`，`stage` 在默认模式为 `skeleton`，`local` 为 `direct-chat`。
+- `GET http://127.0.0.1:8080/api/system/info`：`{name, version, stage, httpPort, imPort, imPath}`，`stage` 在默认模式为 `skeleton`，`local` 为 `contacts`。
 - `GET http://127.0.0.1:8080/actuator/health`：进程及 Netty 正常时返回 `{"status":"UP"}`。
 - `ws://127.0.0.1:8081/im`：WebSocket 握手、控制帧 PING/PONG、JSON v1 应用心跳。TLS 由后续部署入口终止，本地骨架使用 HTTP / WS。
 
@@ -56,3 +56,5 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 认证阶段新增真实中间件测试：根目录 `./scripts/verify-auth.sh` 验证账号注册、密码拒绝、并发刷新、不同新用户并发登录、同设备替换、双客户端票据认证、重放/过期/伪造票据拒绝和注销关闭连接。`./scripts/verify-database.sh` 验证 MySQL 迁移与约束。详细接口见 [认证契约](../contracts/auth.md)。
 
 MySQL、Redis、RabbitMQ 的开发实例已通过真实健康检查；健康检查不验证尚未实现的 MQ 消费拓扑。跨节点在线路由、消息收发、群聊与离线同步仍待下一阶段。
+
+好友 HTTP 端点、重试语义和权限规则见 [联系人契约](../contracts/contacts.md)。好友关系写入复用 V1 表，未修改已应用的迁移。

@@ -1,6 +1,6 @@
 # 文本单聊协议（已实现）
 
-适用于 `local` 配置，系统信息 `stage=direct-chat`。HTTP 使用访问令牌；WebSocket 先按 [认证契约](auth.md) 取得 `AUTH_OK`。所有 ID、seq 均为十进制字符串，客户端按整数比较；当前范围为 Java 正数 Long。时间为 UTC ISO-8601。
+适用于 `local` 配置，当前系统信息 `stage=contacts`（包含上一阶段单聊能力）。HTTP 使用访问令牌；WebSocket 先按 [认证契约](auth.md) 取得 `AUTH_OK`。所有 ID、seq 均为十进制字符串，客户端按整数比较；当前范围为 Java 正数 Long。时间为 UTC ISO-8601。
 
 ## 会话与补拉
 

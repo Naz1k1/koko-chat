@@ -1,6 +1,6 @@
 # koko-chat 桌面端
 
-Kotlin/JVM 21 + Compose Desktop 桌面客户端。已接入中文注册/登录界面、令牌刷新、WebSocket 票据认证、心跳、断线重连与退出清理，以及准确账号发起单聊、文本收发、待发送重试和离线同步；联系人、群聊、已读与托盘尚未实现。HTTP 检查成功不会被显示为 IM 在线。
+Kotlin/JVM 21 + Compose Desktop 桌面客户端。已接入中文注册/登录界面、令牌刷新、WebSocket 票据认证、心跳、断线重连与退出清理，以及准确账号发起单聊、文本收发、待发送重试和离线同步，以及好友申请、接受/拒绝和联系人聊天入口；群聊、已读与托盘尚未实现。HTTP 检查成功不会被显示为 IM 在线。
 
 ## 启动与验证
 
@@ -57,3 +57,7 @@ KOKO_CHAT_TEST_API_BASE=http://127.0.0.1:8080 ./gradlew test --tests dev.koko.ch
 客户端连接 API 依据：[Ktor WebSocket 文档](https://ktor.io/docs/client-websockets.html)。
 
 界面预览：[登录](../../docs/screenshots/auth-login.png)、[最小窗口注册](../../docs/screenshots/auth-register-960.png)。这些 PNG 来自实际 Compose 组件的离屏渲染。
+
+## 联系人管理
+
+工作区点击“联系人”可添加准确账号、填写附言、查看好友及收发申请。收到的待处理申请可接受或拒绝，好友卡片可直接打开单聊。ContactModel 将周期刷新和修改串行处理，每 10 秒更新一次，也支持手动刷新。联系人当前只保存在账号内存快照中，注销清空；聊天历史仍使用独立 SQLite 缓存。好友变更暂不走 MQ 推送，未实现取消、删除、拉黑或备注编辑。
