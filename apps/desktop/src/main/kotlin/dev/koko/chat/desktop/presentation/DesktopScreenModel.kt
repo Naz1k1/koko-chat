@@ -1,5 +1,7 @@
 package dev.koko.chat.desktop.presentation
 
+import dev.koko.chat.desktop.contact.ContactModel
+import dev.koko.chat.desktop.contact.ContactUiState
 import dev.koko.chat.desktop.chat.ChatModel
 import dev.koko.chat.desktop.chat.ChatUiState
 import dev.koko.chat.desktop.session.SessionManager
@@ -44,6 +46,7 @@ class DesktopScreenModel(
     private val probe: ServiceProbe,
     private val sessions: SessionManager? = null,
     private val chat: ChatModel? = null,
+    private val contacts: ContactModel? = null,
 ) {
     private val job = SupervisorJob(parentScope.coroutineContext[Job])
     private val scope = CoroutineScope(parentScope.coroutineContext + job)
@@ -57,6 +60,10 @@ class DesktopScreenModel(
     }
     fun logout() { scope.launch { sessions?.logout() } }
     val chatState:StateFlow<ChatUiState> = chat?.state ?: MutableStateFlow(ChatUiState())
+    val contactState: StateFlow<ContactUiState> = contacts?.state ?: MutableStateFlow(ContactUiState(loading = false))
+    fun refreshContacts() { contacts?.refresh() }
+    fun applyFriend(account: String, greeting: String, onSaved: () -> Unit) { contacts?.apply(account, greeting, onSaved) }
+    fun decideFriend(id: String, accept: Boolean) { contacts?.decide(id, accept) }
     fun selectConversation(id:String) { chat?.select(id) }
     fun createConversation(account:String) { chat?.create(account) }
     fun sendMessage(text:String,onSaved:()->Unit) { chat?.send(text,onSaved) }

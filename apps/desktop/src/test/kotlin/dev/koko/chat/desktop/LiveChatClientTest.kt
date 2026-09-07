@@ -1,6 +1,7 @@
 package dev.koko.chat.desktop
 
 import dev.koko.chat.desktop.chat.ChatModel
+import dev.koko.chat.desktop.contact.ContactModel
 import dev.koko.chat.desktop.config.ServiceSettings
 import dev.koko.chat.desktop.network.*
 import dev.koko.chat.desktop.session.*
@@ -44,13 +45,33 @@ class LiveChatClientTest {
             val dispatcher=Executors.newSingleThreadExecutor().asCoroutineDispatcher()
             val chatA=ChatModel(this,alice,wireA,KtorChatApi(clientA),temp.root.toPath().resolve("a"),dispatcher)
             val chatB=ChatModel(this,bob,wireB,KtorChatApi(clientB),temp.root.toPath().resolve("b"),dispatcher)
+            val contactsA=ContactModel(this,alice,KtorContactApi(clientA))
+            val contactsB=ContactModel(this,bob,KtorContactApi(clientB))
             val pushed=CompletableDeferred<Unit>()
             val observer=launch { wireB.events.collect { if(it.envelope["type"]?.jsonPrimitive?.content=="MESSAGE") pushed.complete(Unit) } }
             try {
                 alice.signIn(settings,"${prefix}c","Live-chat-password!","单聊甲",true)
                 bob.signIn(settings,"${prefix}d","Live-chat-password!","单聊乙",true)
                 withTimeout(20_000) { alice.state.first { it.phase==SessionState.ONLINE };bob.state.first { it.phase==SessionState.ONLINE } }
-                chatA.create("${prefix}d")
+                // 先拒绝一次，再重新申请并接受；最终从真实好友列表选择聊天对象。
+                withTimeout(10_000) { contactsA.state.first { !it.loading };contactsB.state.first { !it.loading } }
+                contactsA.apply("${prefix}d","你好，一起交流")
+                withTimeout(10_000) { contactsA.state.first { it.requests.size==1 && !it.busy } }
+                contactsB.refresh()
+                val firstRequest=withTimeout(10_000) { contactsB.state.first { it.requests.size==1 } }.requests.single()
+                contactsB.decide(firstRequest.id,false)
+                withTimeout(10_000) { contactsB.state.first { it.requests.singleOrNull()?.status=="REJECTED" && !it.busy } }
+                contactsA.apply("${prefix}d","再次申请")
+                withTimeout(10_000) { contactsA.state.first { it.requests.size==2 && !it.busy } }
+                contactsB.refresh()
+                val next=withTimeout(10_000) { contactsB.state.first { it.requests.any { item -> item.status=="PENDING" } } }.requests.first { it.status=="PENDING" }
+                assertNotEquals(firstRequest.id,next.id)
+                contactsB.decide(next.id,true)
+                withTimeout(10_000) { contactsB.state.first { it.friends.size==1 && !it.busy } }
+                contactsA.refresh()
+                val friend=withTimeout(10_000) { contactsA.state.first { it.friends.size==1 } }.friends.single()
+                assertEquals("${prefix}d",friend.account)
+                chatA.create(friend.account)
                 withTimeout(10_000) { chatA.state.first { it.selectedId!=null } }
                 chatA.send("你好，来自 RabbitMQ 的消息")
                 assertNotNull(withTimeoutOrNull(15_000) { pushed.await() },
@@ -61,14 +82,16 @@ class LiveChatClientTest {
                 assertEquals(chatA.state.value.messages.single().id,chatB.state.value.messages.single().id)
                 bob.logout()
                 withTimeout(5_000) { chatB.state.first { it.messages.isEmpty() } }
+                withTimeout(5_000) { contactsB.state.first { it.friends.isEmpty() && it.requests.isEmpty() } }
                 chatA.send("你离线时发送的第二条消息")
                 withTimeout(15_000) { chatA.state.first { it.messages.size==2 && it.pending.isEmpty() } }
                 bob.signIn(settings,"${prefix}d","Live-chat-password!",null,false)
                 withTimeout(20_000) { bob.state.first { it.phase==SessionState.ONLINE };chatB.state.first { it.messages.size==2 } }
+                withTimeout(10_000) { contactsB.state.first { it.friends.size==1 } }
                 assertEquals(listOf("1","2"),chatB.state.value.messages.map { it.seq })
                 assertEquals("你离线时发送的第二条消息",chatB.state.value.messages.last().text)
             } finally {
-                observer.cancelAndJoin();chatA.close();chatB.close();alice.close();bob.close()
+                observer.cancelAndJoin();contactsA.close();contactsB.close();chatA.close();chatB.close();alice.close();bob.close()
                 clientA.close();clientB.close();clientA.coroutineContext[Job]?.join();clientB.coroutineContext[Job]?.join();dispatcher.close()
             }
         }

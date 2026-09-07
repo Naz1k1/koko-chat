@@ -35,9 +35,10 @@ fun DesktopApp(model: DesktopScreenModel, closing: Boolean) {
     val state by model.state.collectAsState()
     val session by model.sessionState.collectAsState()
     val chat by model.chatState.collectAsState()
+    val contacts by model.contactState.collectAsState()
     MaterialTheme(colorScheme = lightColorScheme(primary = Accent, background = Canvas, surface = Color.White)) {
         if (session.user != null && session.phase != SessionState.SIGNING_OUT) {
-            ChatWorkspace(session, chat, closing, model)
+            ChatWorkspace(session, chat, closing, model, contacts)
         } else BoxWithConstraints(Modifier.fillMaxSize()) {
             val compact = maxHeight < 700.dp
             Row(Modifier.fillMaxSize().background(Canvas)) {
