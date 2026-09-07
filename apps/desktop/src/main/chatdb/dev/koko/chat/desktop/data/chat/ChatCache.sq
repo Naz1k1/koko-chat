@@ -1,0 +1,54 @@
+-- 每个服务和账号使用独立数据库文件，禁止跨账号复用会话或游标。
+CREATE TABLE cached_conversation (
+    id TEXT NOT NULL PRIMARY KEY,
+    epoch TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    contiguous_seq INTEGER NOT NULL
+);
+CREATE TABLE cached_message (
+    id TEXT NOT NULL PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    epoch TEXT NOT NULL,
+    seq INTEGER NOT NULL,
+    payload TEXT NOT NULL,
+    UNIQUE(conversation_id, epoch, seq)
+);
+CREATE TABLE pending_message (
+    client_msg_id TEXT NOT NULL PRIMARY KEY,
+    conversation_id TEXT NOT NULL,
+    epoch TEXT NOT NULL,
+    text TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    next_attempt_at INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    error TEXT
+);
+
+conversations:
+SELECT * FROM cached_conversation ORDER BY id;
+conversation:
+SELECT * FROM cached_conversation WHERE id=?;
+putConversation:
+INSERT OR REPLACE INTO cached_conversation VALUES (?, ?, ?, ?);
+putMessage:
+INSERT OR IGNORE INTO cached_message VALUES (?, ?, ?, ?, ?);
+messageAt:
+SELECT * FROM cached_message WHERE conversation_id=? AND epoch=? AND seq=?;
+messages:
+SELECT * FROM cached_message WHERE conversation_id=? AND epoch=? ORDER BY seq DESC LIMIT 200;
+clearMessages:
+DELETE FROM cached_message WHERE conversation_id=?;
+advance:
+UPDATE cached_conversation SET contiguous_seq=? WHERE id=? AND epoch=?;
+putPending:
+INSERT INTO pending_message VALUES (?, ?, ?, ?, ?, ?, 'PENDING', NULL);
+pending:
+SELECT * FROM pending_message ORDER BY created_at,client_msg_id;
+duePending:
+SELECT * FROM pending_message WHERE status='PENDING' AND next_attempt_at<=? ORDER BY created_at LIMIT 20;
+removePending:
+DELETE FROM pending_message WHERE client_msg_id=?;
+retryPending:
+UPDATE pending_message SET next_attempt_at=?,status=?,error=? WHERE client_msg_id=?;
+invalidatePending:
+UPDATE pending_message SET status='FAILED',error='成员周期已变更，请重新发送' WHERE conversation_id=? AND epoch<>?;

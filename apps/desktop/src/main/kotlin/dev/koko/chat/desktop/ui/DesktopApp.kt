@@ -34,8 +34,11 @@ private val Line = Color(0xFFE5EAE5)
 fun DesktopApp(model: DesktopScreenModel, closing: Boolean) {
     val state by model.state.collectAsState()
     val session by model.sessionState.collectAsState()
+    val chat by model.chatState.collectAsState()
     MaterialTheme(colorScheme = lightColorScheme(primary = Accent, background = Canvas, surface = Color.White)) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (session.user != null && session.phase != SessionState.SIGNING_OUT) {
+            ChatWorkspace(session, chat, closing, model)
+        } else BoxWithConstraints(Modifier.fillMaxSize()) {
             val compact = maxHeight < 700.dp
             Row(Modifier.fillMaxSize().background(Canvas)) {
                 Column(Modifier.width(76.dp).fillMaxHeight().background(Ink).padding(vertical = 26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -61,7 +64,7 @@ fun DesktopApp(model: DesktopScreenModel, closing: Boolean) {
                     Spacer(Modifier.height(58.dp))
                     Text("这里还没有会话", color = Ink, fontSize = 14.sp)
                     Spacer(Modifier.height(8.dp))
-                    Text("登录后可保持聊天连接。\n联系人和消息收发将在下一步接入。", color = Muted, fontSize = 12.sp, lineHeight = 21.sp)
+                    Text("登录后输入对方账号，\n开始单聊并同步历史消息。", color = Muted, fontSize = 12.sp, lineHeight = 21.sp)
                     Spacer(Modifier.weight(1f))
                     HorizontalDivider(color = Line)
                     Spacer(Modifier.height(16.dp))
@@ -74,7 +77,7 @@ fun DesktopApp(model: DesktopScreenModel, closing: Boolean) {
                 Column(Modifier.weight(1f).fillMaxHeight().padding(32.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("工作空间", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        Text("账号认证 · 0.1", color = Accent, fontSize = 11.sp, modifier = Modifier.background(Color(0xFFE6EEE7), RoundedCornerShape(20.dp)).padding(horizontal = 12.dp, vertical = 7.dp))
+                        Text("单聊 · 0.1", color = Accent, fontSize = 11.sp, modifier = Modifier.background(Color(0xFFE6EEE7), RoundedCornerShape(20.dp)).padding(horizontal = 12.dp, vertical = 7.dp))
                     }
                     Spacer(Modifier.height(25.dp))
                     ServiceStatus(state, closing, model::checkService)
@@ -82,13 +85,13 @@ fun DesktopApp(model: DesktopScreenModel, closing: Boolean) {
                         AccountPanel(session, state.initialized && !state.settingsSaving && !closing, compact, model)
                     }
                     if (!compact) Row(Modifier.fillMaxWidth().border(1.dp, Line, RoundedCornerShape(12.dp)).padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (closing) "正在关闭网络与本地存储…" else "消息输入区将在聊天功能接入后开放", color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
+                        Text(if (closing) "正在关闭网络与本地存储…" else "登录后即可发起单聊", color = Muted, fontSize = 12.sp, modifier = Modifier.weight(1f))
                         Text("发送", color = Color(0xFFABB4AD), fontSize = 12.sp)
                     }
                 }
             }
-            if (state.settingsOpen) SettingsDialog(state, model)
         }
+        if (state.settingsOpen) SettingsDialog(state, model)
     }
 }
 

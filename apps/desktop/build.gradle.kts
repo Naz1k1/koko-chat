@@ -38,6 +38,10 @@ dependencies {
 // 从 .sq 文件生成类型化查询和建表代码，生成文件位于 build 目录，不手工维护。
 sqldelight {
     databases {
+        create("ChatDatabase") {
+            packageName.set("dev.koko.chat.desktop.data.chat.generated")
+            srcDirs.setFrom("src/main/chatdb")
+        }
         create("DesktopDatabase") {
             packageName.set("dev.koko.chat.desktop.data.generated")
         }
