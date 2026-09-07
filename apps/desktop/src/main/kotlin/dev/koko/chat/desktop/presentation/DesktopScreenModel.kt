@@ -1,5 +1,7 @@
 package dev.koko.chat.desktop.presentation
 
+import dev.koko.chat.desktop.group.*
+import dev.koko.chat.desktop.network.GroupMember
 import dev.koko.chat.desktop.contact.ContactModel
 import dev.koko.chat.desktop.contact.ContactUiState
 import dev.koko.chat.desktop.chat.ChatModel
@@ -47,6 +49,7 @@ class DesktopScreenModel(
     private val sessions: SessionManager? = null,
     private val chat: ChatModel? = null,
     private val contacts: ContactModel? = null,
+    private val groups: GroupModel? = null,
 ) {
     private val job = SupervisorJob(parentScope.coroutineContext[Job])
     private val scope = CoroutineScope(parentScope.coroutineContext + job)
@@ -64,6 +67,17 @@ class DesktopScreenModel(
     fun refreshContacts() { contacts?.refresh() }
     fun applyFriend(account: String, greeting: String, onSaved: () -> Unit) { contacts?.apply(account, greeting, onSaved) }
     fun decideFriend(id: String, accept: Boolean) { contacts?.decide(id, accept) }
+    val groupState: StateFlow<GroupUiState> = groups?.state ?: MutableStateFlow(GroupUiState())
+    fun openCreateGroup() { groups?.openCreate() }
+    fun openGroupManagement() { groups?.openManage() }
+    fun closeGroupDialog() { groups?.closeDialog() }
+    fun refreshGroup() { groups?.refresh() }
+    fun createGroup(title: String, members: List<String>) { groups?.create(title,members) }
+    fun inviteGroup(members: List<String>) { groups?.invite(members) }
+    fun removeGroupMember(member: GroupMember) { groups?.remove(member) }
+    fun leaveGroup(close: Boolean) { groups?.leave(close) }
+    fun retryGroupOperation() { groups?.retry() }
+    fun dismissGroupOperation() { groups?.dismissPending() }
     fun selectConversation(id:String) { chat?.select(id) }
     fun createConversation(account:String) { chat?.create(account) }
     fun sendMessage(text:String,onSaved:()->Unit) { chat?.send(text,onSaved) }

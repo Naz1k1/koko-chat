@@ -34,6 +34,13 @@ class ChatStoreTest {
             store.saveConversations(listOf(info.copy(membershipEpoch="epoch-2",visibleFromSeq="5")))
             assertEquals(4,store.cursor("10"));assertEquals("FAILED",store.pending().single { it.clientMsgId==pending }.status)
             assertFailsWith<IllegalArgumentException> { store.saveMessages("10","epoch-1",listOf(first)) }
+            store.removeConversation("10")
+            assertTrue(store.conversations().isEmpty())
+            store.retry(pending,false,null) // 迟到的网络失败不能把已失去权限的意图恢复为自动重试。
+            assertEquals("FAILED",store.pending().single().status)
+            store.saveConversations(listOf(info.copy(membershipEpoch="epoch-3",visibleFromSeq="6")))
+            assertTrue(store.messages(info.copy(membershipEpoch="epoch-3")).isEmpty())
+            assertEquals(5,store.cursor("10"))
         } finally { store.close();dispatcher.close() }
     }
 }

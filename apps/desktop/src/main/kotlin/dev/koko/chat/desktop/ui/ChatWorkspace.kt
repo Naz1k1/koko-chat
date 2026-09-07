@@ -14,13 +14,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.koko.chat.desktop.chat.ChatUiState
 import dev.koko.chat.desktop.contact.ContactUiState
+import dev.koko.chat.desktop.group.GroupUiState
 import dev.koko.chat.desktop.presentation.DesktopScreenModel
 import dev.koko.chat.desktop.session.SessionUiState
 
 /** 真实单聊工作区：已保存消息和待发送消息分开展示，不将 MQ 发布成功显示成对方已读。 */
 @Composable
 internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Boolean,model:DesktopScreenModel,
-                           contacts:ContactUiState = ContactUiState(loading = false)) {
+                           contacts:ContactUiState = ContactUiState(loading = false),
+                           groups:GroupUiState = GroupUiState()) {
     var showContacts by remember(session.user?.id) { mutableStateOf(false) }
     var peer by remember { mutableStateOf("") }
     var draft by remember(state.selectedId) { mutableStateOf("") }
@@ -34,19 +36,20 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
             Text("${session.user?.nickname} · @${session.user?.account}",fontSize=12.sp)
             val unreadRequests = contacts.requests.count { it.receiverId == session.user?.id && it.status == "PENDING" }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(!showContacts, { showContacts = false }, label = { Text("会话") })
-                FilterChip(showContacts, { showContacts = true }, label = { Text(if (unreadRequests > 0) "联系人 · $unreadRequests" else "联系人") })
+                FilterChip(!showContacts, { showContacts = false; model.closeGroupDialog() }, label = { Text("会话") })
+                FilterChip(showContacts, { showContacts = true; model.closeGroupDialog() }, label = { Text(if (unreadRequests > 0) "联系人 · $unreadRequests" else "联系人") })
             }
             OutlinedTextField(peer,{peer=it},label={Text("对方的准确账号")},singleLine=true,modifier=Modifier.fillMaxWidth())
-            Button({showContacts=false;model.createConversation(peer.trim())},enabled=!closing && !state.creating && peer.isNotBlank(),modifier=Modifier.fillMaxWidth()) { Text(if(state.creating) "正在创建…" else "发起单聊") }
+            Button({showContacts=false;model.closeGroupDialog();model.createConversation(peer.trim())},enabled=!closing && !state.creating && peer.isNotBlank(),modifier=Modifier.fillMaxWidth()) { Text(if(state.creating) "正在创建…" else "发起单聊") }
+            TextButton({showContacts=false;model.openCreateGroup()},enabled=!closing,modifier=Modifier.fillMaxWidth()) { Text("创建群聊") }
             HorizontalDivider()
             Text("会话 · ${state.conversations.size}",fontSize=12.sp,color=Color(0xFF77817D))
             LazyColumn(Modifier.weight(1f),verticalArrangement=Arrangement.spacedBy(8.dp)) {
                 items(state.conversations,key={it.id}) { conversation ->
                     Column(Modifier.fillMaxWidth().background(if(conversation.id==selected?.id) Color(0xFFE2EFE8) else Color.Transparent,RoundedCornerShape(12.dp))
-                        .clickable { showContacts = false; model.selectConversation(conversation.id) }.padding(14.dp)) {
+                        .clickable { showContacts = false; model.closeGroupDialog(); model.selectConversation(conversation.id) }.padding(14.dp)) {
                         Text(conversation.nickname,fontWeight=FontWeight.SemiBold)
-                        Text("@${conversation.account}",fontSize=11.sp,color=Color(0xFF77817D))
+                        Text(if(conversation.type=="GROUP") "群聊" else "@${conversation.account}",fontSize=11.sp,color=Color(0xFF77817D))
                     }
                 }
             }
@@ -54,13 +57,18 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
             Row { TextButton(model::openSettings,enabled=!closing) { Text("服务设置") };TextButton(model::logout,enabled=!closing && !session.busy) { Text("退出登录") } }
         }
         VerticalDivider()
-        if (showContacts) Box(Modifier.weight(1f).fillMaxHeight()) {
+        if(groups.dialog!=null) Box(Modifier.weight(1f).fillMaxHeight()) {
+            GroupPane(session,groups,contacts,closing,model)
+        } else if (showContacts) Box(Modifier.weight(1f).fillMaxHeight()) {
             ContactsPane(session, contacts, closing, model) { account ->
                 model.createConversation(account)
                 showContacts = false
             }
         } else Column(Modifier.weight(1f).fillMaxHeight().padding(24.dp),verticalArrangement=Arrangement.spacedBy(12.dp)) {
-            Text(selected?.nickname ?: "开始一段对话",fontSize=23.sp,fontWeight=FontWeight.SemiBold,color=Color(0xFF213D38))
+            Row(verticalAlignment=Alignment.CenterVertically) {
+                Text(selected?.nickname ?: "开始一段对话",fontSize=23.sp,fontWeight=FontWeight.SemiBold,color=Color(0xFF213D38),modifier=Modifier.weight(1f))
+                if(selected?.type=="GROUP") TextButton(model::openGroupManagement,enabled=!closing) { Text("群成员") }
+            }
             Text(state.notice,fontSize=11.sp,color=Color(0xFF77817D))
             HorizontalDivider()
             if(selected==null) {
@@ -68,7 +76,8 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
             } else LazyColumn(Modifier.weight(1f).fillMaxWidth(),state=list,verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 items(state.messages,key={"message-${it.id}"}) { message ->
                     val mine=message.senderId==session.user?.id
-                    MessageBubble(message.text,if(mine) "已保存到服务器" else selected.nickname,mine)
+                    val sender=if(selected.type=="GROUP") groups.detail?.takeIf { it.id==selected.id }?.members?.find { it.userId==message.senderId }?.nickname ?: "成员 ${message.senderId}" else selected.nickname
+                    MessageBubble(message.text,if(mine) "已保存到服务器" else sender,mine)
                 }
                 items(state.pending,key={"pending-${it.clientMsgId}"}) { pending ->
                     Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.End) {

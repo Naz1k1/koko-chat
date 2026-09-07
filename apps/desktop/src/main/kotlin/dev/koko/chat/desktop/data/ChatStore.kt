@@ -74,7 +74,20 @@ class ChatStore(directory:Path,server:String,private val userId:String,private v
         else q.pending().executeAsList().map { Pending(it.client_msg_id,it.conversation_id,it.epoch,it.text,it.status,it.error) }
     }
     suspend fun retry(id:String,permanent:Boolean,error:String?) = withContext(dispatcher) {
-        db().chatCacheQueries.retryPending(System.currentTimeMillis()+2000,if(permanent) "FAILED" else "PENDING",error,id)
+        val db=db();val q=db.chatCacheQueries
+        db.transaction {
+            val pending=q.pendingById(id).executeAsOneOrNull()
+            if(pending!=null) {
+                val valid=q.conversation(pending.conversation_id).executeAsOneOrNull()?.epoch==pending.epoch
+                q.retryPending(System.currentTimeMillis()+2000,if(permanent || !valid) "FAILED" else "PENDING",
+                    if(valid) error else "已退出或成员周期变化，请重新发送",id)
+            }
+        }
+    }
+    /** 撤销访问后清除收到的缓存，保留失败发送意图；重入必须使用新周期重新同步。 */
+    suspend fun removeConversation(id:String) = withContext(dispatcher) {
+        val db=db();val q=db.chatCacheQueries
+        db.transaction { q.clearMessages(id);q.invalidateAllPending(id);q.removeConversation(id) }
     }
     suspend fun close() = withContext(dispatcher) { driver?.close();driver=null;database=null }
 }

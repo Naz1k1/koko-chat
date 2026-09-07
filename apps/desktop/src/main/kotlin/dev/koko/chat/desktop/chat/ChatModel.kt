@@ -31,7 +31,7 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
                     try {
                         coroutineScope {
                             val current=Binding(account.second!!,account.first.id,store,this);binding=current
-                            refreshView(current)
+                            // 首次目录校验成功前不展示旧群缓存，避免退出或重入后短暂显示旧周期。
                             launch { while(isActive) { try { sync(current) } catch(error:Exception) { ensureActive();notice(current,"同步暂未完成，稍后会自动重试") };delay(10_000) } }
                             launch {
                                 connector.events.collect { event ->
@@ -39,7 +39,7 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
                                         try {
                                             val message=json.decodeFromJsonElement<ChatMessage>(event.envelope.getValue("message"))
                                             val epoch=event.envelope.getValue("membershipEpoch").jsonPrimitive.content
-                                            if(store.conversations().none { it.id==message.conversationId }) sync(current)
+                                            if(store.conversations().none { it.id==message.conversationId && it.membershipEpoch==epoch }) sync(current)
                                             val cursor=store.saveMessages(message.conversationId,epoch,listOf(message))
                                             refreshView(current);ack(current,message.conversationId,epoch,cursor)
                                         } catch(error:Exception) { ensureActive();notice(current,"消息将在下一轮同步补齐") }
@@ -66,10 +66,22 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
         current.scope.launch {
             try {
                 require(account.matches(Regex("[A-Za-z0-9_]{3,32}"))) { "请输入准确账号" }
-                val info=sessions.withAccess { settings,token -> api.direct(settings,token,account) }
-                current.store.saveConversations(listOf(info));refreshView(current,info.id);notice(current,"会话已建立")
+                current.sync.withLock {
+                    val info=sessions.withAccess { settings,token -> api.direct(settings,token,account) }
+                    current.store.saveConversations(listOf(info));refreshView(current,info.id);notice(current,"会话已建立")
+                }
             } catch(error:Exception) { ensureActive();notice(current,if(error is ResponseException && error.response.status.value==404) "未找到该账号" else "创建会话失败，请检查账号并重试") }
             finally { if(binding===current) mutable.update { it.copy(creating=false) } }
+        }
+    }
+    fun refresh() { val current=binding?:return;current.scope.launch { try { sync(current) } catch(error:Exception) { ensureActive();notice(current,"同步暂未完成，请稍后刷新") } } }
+    fun open(id:String) {
+        val current=binding?:return
+        current.scope.launch {
+            try { current.sync.withLock {
+                val info=sessions.withAccess { settings,token -> api.summary(settings,token,id) }
+                current.store.saveConversations(listOf(info));refreshView(current,id)
+            };sync(current) } catch(error:Exception) { ensureActive();notice(current,"会话暂不可用，请刷新后重试") }
         }
     }
     fun send(text:String,onSaved:()->Unit = {}) {
@@ -83,13 +95,26 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
     /** 拉取固定 toSeq 的完整分页，不把服务端设备游标当成本机历史缓存。 */
     private suspend fun sync(current:Binding) = current.sync.withLock {
         var after="0"
+        val seen=mutableSetOf<String>()
         do {
             val page=sessions.withAccess { settings,token -> api.conversations(settings,token,after) }
             current.store.saveConversations(page.conversations)
+            seen.addAll(page.conversations.map { it.id })
             after=page.nextCursor
             if(!page.hasMore) break
         } while(currentCoroutineContext().isActive)
+        // 列表分页不是快照。对缺失的本机会话单独核验，不能把分页竞态或网络异常当作退群。
+        for(info in current.store.conversations().filter { it.id !in seen }) {
+            try {
+                val latest=sessions.withAccess { settings,token -> api.summary(settings,token,info.id) }
+                current.store.saveConversations(listOf(latest))
+            } catch(error:ResponseException) {
+                if(error.response.status.value in setOf(403,404)) current.store.removeConversation(info.id) else throw error
+            }
+        }
+        refreshView(current)
         for(info in current.store.conversations()) {
+            try {
             var cursor=current.store.cursor(info.id).toString()
             do {
                 val page=sessions.withAccess { settings,token -> api.history(settings,token,info.id,cursor,info.latestSeq) }
@@ -98,6 +123,9 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
                 ack(current,info.id,page.membershipEpoch,contiguous)
                 if(!page.hasMore) break
             } while(currentCoroutineContext().isActive)
+            } catch(error:ResponseException) {
+                if(error.response.status.value in setOf(403,404)) current.store.removeConversation(info.id) else throw error
+            }
         }
         refreshView(current);notice(current,"消息已同步")
     }

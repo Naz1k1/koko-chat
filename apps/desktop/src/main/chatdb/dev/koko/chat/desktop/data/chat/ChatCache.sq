@@ -52,3 +52,11 @@ retryPending:
 UPDATE pending_message SET next_attempt_at=?,status=?,error=? WHERE client_msg_id=?;
 invalidatePending:
 UPDATE pending_message SET status='FAILED',error='成员周期已变更，请重新发送' WHERE conversation_id=? AND epoch<>?;
+
+-- 只在服务端明确拒绝访问后隐藏会话，网络失败不能当作退群。
+removeConversation:
+DELETE FROM cached_conversation WHERE id=?;
+invalidateAllPending:
+UPDATE pending_message SET status='FAILED',error='已退出会话，消息未发送' WHERE conversation_id=?;
+pendingById:
+SELECT * FROM pending_message WHERE client_msg_id=?;
