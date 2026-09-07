@@ -1,6 +1,6 @@
-# koko-chat 后端骨架
+# koko-chat 后端
 
-Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包，采用 Controller / Handler → Service → Mapper；目前只有系统探针和连接层，没有登录或聊天业务。
+Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包，采用 Controller / Handler → Service → Mapper；已实现系统探针、注册登录、令牌会话与 Netty 票据认证；聊天与 MQ 消费者尚未实现。
 
 ## 构建与默认启动
 
@@ -13,7 +13,7 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 
 也可执行 `java -jar target/koko-chat-server-0.1.0-SNAPSHOT.jar`。默认 `skeleton` profile 不创建 MySQL、Redis、RabbitMQ 客户端，因此无需启动中间件。
 
-- `GET http://127.0.0.1:8080/api/system/info`：`{name, version, stage, httpPort, imPort, imPath}`，当前 `stage` 为 `skeleton`。
+- `GET http://127.0.0.1:8080/api/system/info`：`{name, version, stage, httpPort, imPort, imPath}`，`stage` 在默认模式为 `skeleton`，`local` 为 `authentication`。
 - `GET http://127.0.0.1:8080/actuator/health`：进程及 Netty 正常时返回 `{"status":"UP"}`。
 - `ws://127.0.0.1:8081/im`：WebSocket 握手、控制帧 PING/PONG、JSON v1 应用心跳。TLS 由后续部署入口终止，本地骨架使用 HTTP / WS。
 
@@ -21,9 +21,9 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 
 响应：`{"v":1,"type":"PONG","requestId":"probe-1","serverTime":"UTC ISO-8601"}`。
 
-`AUTH` 返回 `ERROR / NOT_IMPLEMENTED`；`SEND`、`RECEIVED_ACK`、`READ` 返回 `ERROR / UNAUTHENTICATED`。没有 `AUTH_OK` 或 `SEND_ACK`，不会把连接成功伪装成认证或消息保存成功。错误响应字段为 `v/type/requestId?/serverTime/code/message`。
+默认骨架模式的 `AUTH` 返回 `NOT_IMPLEMENTED`。`local` 模式使用一次性 Redis 票据，成功返回 `AUTH_OK`；未认证的消息命令返回 `UNAUTHENTICATED`，认证后仍返回 `NOT_IMPLEMENTED`，消息保存确认尚未实现。错误响应字段为 `v/type/requestId?/serverTime/code/message`。
 
-单帧和完整聚合消息均限制为 16 KiB；只接收 JSON 文本。握手后未认证连接在 30 秒关闭，PING 不延长认证期限；读空闲 75 秒关闭。Netty EventLoop 仅做轻量协议解析；后续 JDBC/Redis/密码校验应提交到有界 `imBusinessExecutor`，过载拒绝由调用方转换为可重试错误。
+单帧和完整聚合消息均限制为 16 KiB；只接收 JSON 文本。握手后未认证连接在 30 秒关闭，PING 不延长认证期限；读空闲 75 秒关闭。Netty EventLoop 仅做轻量协议解析；票据验证和会话有效性查询通过有界 `imBusinessExecutor` 执行，过载关闭 1013，防止阻塞 Netty 事件循环。
 
 ## local profile 与中间件
 
@@ -45,7 +45,7 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 | `RABBITMQ_HOST` / `RABBITMQ_PORT` | `127.0.0.1` / `5672` |
 | `RABBITMQ_USERNAME` / `RABBITMQ_PASSWORD` | `koko` / 密码必须从环境变量提供 |
 
-`local` 启用数据源、Redis、RabbitMQ 和 Flyway；首次迁移创建账号、好友、会话、消息、游标与 Outbox 共 9 张业务表，详情见 [数据库文件与迁移说明](../docs/database.md)。当前尚无业务 Mapper、队列声明或消费者。RabbitMQ 已配置 correlated confirms、returns、mandatory 和 manual ACK，为后续实现预留。Actuator health 会反映 local 中间件连接状态；健康探针不代表 MQ 拓扑或聊天业务已经就绪。
+`local` 启用数据源、Redis、RabbitMQ 和 Flyway；首次迁移创建账号、好友、会话、消息、游标与 Outbox 共 9 张业务表，详情见 [数据库文件与迁移说明](../docs/database.md)。认证 Mapper 已接入账号与登录会话，V2 增加访问令牌摘要；尚无聊天队列声明或消费者。RabbitMQ 已配置 correlated confirms、returns、mandatory 和 manual ACK，为后续实现预留。Actuator health 会反映 local 中间件连接状态；健康探针不代表 MQ 拓扑或聊天业务已经就绪。
 
 版本依据：[Spring Boot 3.5 官方要求](https://docs.spring.io/spring-boot/3.5/system-requirements.html)、[MyBatis 官方兼容表](https://mybatis.org/spring-boot-starter/mybatis-spring-boot-autoconfigure/)。
 
@@ -53,4 +53,6 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 
 `./mvnw verify` 包含 10 项常规自动测试：真实随机端口 HTTP/Actuator 与 WebSocket 探针、应用/控制帧心跳、未实现认证与未认证 SEND 拒绝、非法 JSON/版本、分片聚合及大小限制、二进制拒绝、错误握手路径、未认证连接期限、关闭连接并释放端口、端口占用导致 Spring 启动失败且不残留 EventLoop 线程。另有 MySqlSchemaTest，只有显式提供测试连接时才运行，默认跳过；配置方法见数据库说明。
 
-这批测试已在 JDK 21 上通过，未连接外部中间件。`local` 的真实 MySQL/Redis/RabbitMQ 连通性及 MQ 拓扑、登录和聊天业务不在本次骨架验证范围内。
+认证阶段新增真实中间件测试：根目录 `./scripts/verify-auth.sh` 验证账号注册、密码拒绝、并发刷新、不同新用户并发登录、同设备替换、双客户端票据认证、重放/过期/伪造票据拒绝和注销关闭连接。`./scripts/verify-database.sh` 验证 MySQL 迁移与约束。详细接口见 [认证契约](../contracts/auth.md)。
+
+MySQL、Redis、RabbitMQ 的开发实例已通过真实健康检查；健康检查不验证尚未实现的 MQ 消费拓扑。跨节点在线路由、消息收发、群聊与离线同步仍待下一阶段。

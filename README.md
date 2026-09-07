@@ -2,7 +2,7 @@
 
 桌面即时通信项目。客户端采用 **Kotlin + Compose Desktop**；服务端采用 **Java 21 + Spring Boot 3.5.x + Netty + RabbitMQ + MySQL + Redis**，按 Controller / Handler → Service → Mapper 常规分层组织。
 
-当前阶段为工程骨架。后端提供系统信息、健康检查和 Netty WebSocket 心跳入口；桌面端提供中文基础窗口、服务检查与 SQLite 设置保存。登录、消息持久化、群聊、MQ 分发和离线同步按架构文档逐步实现。桌面端采用 MVVM + StateFlow、Ktor HTTPS/WSS、SQLDelight + SQLite，两端统一使用 JDK 21。
+当前已完成账号认证闭环：注册、登录、令牌刷新、注销、一次性票据、Netty 认证与心跳，以及中文桌面登录界面、断线重连和 SQLite 设置保存。消息持久化、群聊、MQ 分发和离线同步按架构文档逐步实现。桌面端采用 MVVM + StateFlow、Ktor HTTPS/WSS、SQLDelight + SQLite，两端统一使用 JDK 21。
 
 ## 后端启动
 
@@ -34,7 +34,7 @@ cd apps/desktop
 ./gradlew run
 ```
 
-桌面端默认检查 `http://127.0.0.1:8080`，可在服务设置中修改地址并保存到本机 SQLite。界面会区分 HTTP 可达与 IM 登录状态；当前尚未实现登录和聊天连接。
+桌面端默认检查 `http://127.0.0.1:8080`，可在服务设置中修改地址并保存到本机 SQLite。界面区分 HTTP 可达、正在登录、IM 在线和重连状态；注册与登录需要后端启用 `local`。密码和令牌只保存在内存，退出或关闭应用时清理。
 
 生成携带 Java 运行时的桌面应用：
 
@@ -49,7 +49,8 @@ cd apps/desktop
 
 ## 设计文档
 
-- [当前骨架协议与 JSON Schema](contracts/README.md)
+- [当前协议与 JSON Schema](contracts/README.md)
+- [认证 HTTP 接口与 Netty 票据契约](contracts/auth.md)
 - [数据库建表文件、字段与迁移方法](docs/database.md)
 - [架构设计、技术选型与实施顺序](docs/architecture.md)
 - [Kotlin 桌面端：模块、状态、同步与打包](docs/desktop.md)
@@ -60,4 +61,16 @@ cd apps/desktop
 
 旧 IM 项目只作为功能与实现经验参考；新文档、代码和配置均在本仓库维护。
 
-RabbitMQ 从首期承担异步分发、群消息扇出和节点定向投递；消息与 outbox 同事务保存，服务端确认、MQ 确认、设备接收和用户已读分别定义。
+RabbitMQ 已作为开发中间件启动，下一阶段将承担异步分发、群消息扇出和节点定向投递；消息与 outbox 同事务保存，服务端确认、MQ 确认、设备接收和用户已读分别定义。
+
+## 本机认证验收
+
+先准备 `deploy/.env` 并启动中间件，再运行：
+
+```bash
+./scripts/verify-database.sh
+./scripts/verify-auth.sh
+./scripts/verify-desktop-auth.sh
+```
+
+第三个脚本使用已构建的后端 JAR，在 18080/18081 启动临时服务，运行两个真实 Kotlin 客户端并保持在线超过 30 秒，然后退出并定向清理测试账号。原有服务端口被占用时会拒绝启动；可用 `KOKO_CHAT_VERIFY_HTTP_PORT` / `KOKO_CHAT_VERIFY_IM_PORT` 更换测试端口。
