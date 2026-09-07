@@ -81,7 +81,8 @@ final class WebSocketProbeHandler extends SimpleChannelInboundHandler<WebSocketF
                 case "PING" -> reply(context, response("PONG", requestId));
                 case "AUTH" -> authenticate(context, requestId, envelope);
                 case "SEND", "RECEIVED_ACK" -> command(context, requestId, type.textValue(), envelope);
-                case "READ" -> error(context, requestId, "NOT_IMPLEMENTED", "Read receipts are not implemented yet");
+                case "READ" -> error(context, requestId, identity == null ? "UNAUTHENTICATED" : "NOT_IMPLEMENTED",
+                        identity == null ? "Authenticate first" : "Read receipts are not implemented yet");
                 default -> error(context, requestId, "NOT_IMPLEMENTED", "Command is not implemented in this skeleton");
             }
         } catch (JsonProcessingException exception) {

@@ -10,7 +10,7 @@ export HTTP_PORT="${KOKO_CHAT_VERIFY_HTTP_PORT:-18080}"
 export IM_PORT="${KOKO_CHAT_VERIFY_IM_PORT:-18081}"
 export KOKO_CHAT_TEST_API_BASE="http://127.0.0.1:$HTTP_PORT"
 export KOKO_CHAT_TEST_IM_URL="ws://127.0.0.1:$IM_PORT/im"
-export KOKO_CHAT_TEST_STAGE=authentication
+export KOKO_CHAT_TEST_STAGE=direct-chat
 # 只使用空闲端口，防止把另一个服务的健康响应误认为本次启动成功。
 python3 - <<'PORTS'
 import os, socket

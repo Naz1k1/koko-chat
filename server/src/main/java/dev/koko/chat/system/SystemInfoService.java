@@ -26,7 +26,7 @@ public class SystemInfoService {
         // 测试可使用随机端口，优先读取启动完成后发布的实际端口。
         int httpPort = environment.getProperty("local.server.port", Integer.class,
                 environment.getProperty("server.port", Integer.class, 8080));
-        String stage = environment.matchesProfiles("local") ? "authentication" : "skeleton";
+        String stage = environment.matchesProfiles("local") ? "direct-chat" : "skeleton";
         return new SystemInfo("koko-chat", version, stage, httpPort, nettyServer.port(), properties.path());
     }
 }

@@ -99,7 +99,7 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
                 if(!page.hasMore) break
             } while(currentCoroutineContext().isActive)
         }
-        refreshView(current);notice(current,"消息已同步 · 接收回执表示本设备已保存")
+        refreshView(current);notice(current,"消息已同步")
     }
     private suspend fun ack(current:Binding,id:String,epoch:String,seq:Long) {
         if(sessions.state.value.phase!=SessionState.ONLINE) return

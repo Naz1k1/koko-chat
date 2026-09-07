@@ -35,6 +35,7 @@ public class OutboxPublisher {
                 publisher.publish(topology.name("message.x"),"message.created",item.row().payload().getBytes(StandardCharsets.UTF_8),item.row().eventId());
                 mapper.published(item.row().eventId(),item.lease());
             } catch(Exception error) {
+                log.warn("Outbox 发布失败，事件 {} 将重试：{}",item.row().eventId(),error.getClass().getSimpleName());
                 mapper.failed(item.row().eventId(),item.lease(),Math.min(30,(item.row().attempts()+1)*2),error.getClass().getSimpleName());
             }
         }

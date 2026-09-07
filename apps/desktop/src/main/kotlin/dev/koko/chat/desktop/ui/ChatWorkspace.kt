@@ -55,7 +55,7 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
             } else LazyColumn(Modifier.weight(1f).fillMaxWidth(),state=list,verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 items(state.messages,key={"message-${it.id}"}) { message ->
                     val mine=message.senderId==session.user?.id
-                    MessageBubble(message.text,if(mine) "已保存 · #${message.seq}" else "${selected.nickname} · #${message.seq}",mine)
+                    MessageBubble(message.text,if(mine) "已保存到服务器" else selected.nickname,mine)
                 }
                 items(state.pending,key={"pending-${it.clientMsgId}"}) { pending ->
                     Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.End) {
@@ -69,7 +69,7 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
                     modifier=Modifier.weight(1f).heightIn(min=88.dp,max=144.dp),maxLines=5)
                 Button(onClick={val text=draft;model.sendMessage(text) { if(draft==text) draft="" }},enabled=selected!=null && draft.isNotBlank() && !closing) { Text("发送") }
             }
-            Text("先保存到本机，确认后显示“已保存”；断线时保留原编号重试。",fontSize=10.sp,color=Color(0xFF77817D))
+            Text("断线时消息会保存在本机，连接恢复后自动发送。",fontSize=10.sp,color=Color(0xFF77817D))
         }
     }
 }

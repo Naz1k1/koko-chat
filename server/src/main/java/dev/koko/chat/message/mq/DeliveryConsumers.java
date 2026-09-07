@@ -15,6 +15,7 @@ import java.util.concurrent.TimeUnit;
 /** 手动 ACK 只在当前责任完成或可靠转交后执行；每个监听线程独占本次 AMQP Channel。 */
 @Component @Profile("local")
 public class DeliveryConsumers {
+    private static final org.slf4j.Logger log=org.slf4j.LoggerFactory.getLogger(DeliveryConsumers.class);
     public record GatewayTask(MessageEvent event,OnlineRoutes.Route target,String membershipEpoch) {}
     private final ChatMapper mapper;private final ChatService chat;private final OnlineRoutes routes;
     private final ConfirmedPublisher publisher;private final MessagingTopology topology;private final ImAuthSupport connections;private final ObjectMapper json;
@@ -73,16 +74,20 @@ public class DeliveryConsumers {
         ChatService.number(event.messageId(),false);ChatService.number(event.conversationId(),false);ChatService.number(event.seq(),false);
     }
     private void retry(MessageEvent event) throws Exception {
+        log.warn("消息分发重试，事件 {}，次数 {}",event.eventId(),event.attempt());
         byte[] body=json.writeValueAsBytes(event);
         if(event.attempt()>3) dead(body,event.eventId());
         else publisher.publish(topology.name("retry.x"),"retry."+new int[]{5,30,120}[event.attempt()-1]+"s",body,event.eventId());
     }
-    private void dead(byte[] body,String event) throws Exception { publisher.publish(topology.name("dead.x"),"dispatch.dead",body,event); }
+    private void dead(byte[] body,String event) throws Exception {
+        log.warn("消息进入死信转交，事件 {}",event);
+        publisher.publish(topology.name("dead.x"),"dispatch.dead",body,event); }
     private void transferOrRequeue(Message raw,Channel channel,long tag,MessageEvent retry) throws Exception {
         try {
             if(retry==null) dead(raw.getBody(),raw.getMessageProperties().getMessageId()); else retry(retry);
             channel.basicAck(tag,false);
         } catch(Exception unavailable) {
+            log.warn("消息责任转交失败，保留原事件：{}",unavailable.getClass().getSimpleName());
             // 转交失败保留原件；限速重投，持久队列另有 broker delivery-limit 和 DLX 兜底。
             Thread.sleep(1000);channel.basicNack(tag,false,true);
         }

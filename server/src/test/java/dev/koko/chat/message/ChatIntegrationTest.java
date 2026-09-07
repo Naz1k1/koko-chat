@@ -30,6 +30,7 @@ class ChatIntegrationTest {
     @Autowired AuthService auth;@Autowired ChatService chat;@Autowired ChatMapper mapper;@Autowired JdbcTemplate jdbc;
     @Autowired OutboxMapper outbox;@Autowired OutboxPublisher publisher;@Autowired ConfirmedPublisher confirmed;
     @Autowired MessagingTopology topology;@Autowired PlatformTransactionManager transactions;
+    @Autowired org.springframework.amqp.rabbit.core.RabbitTemplate rabbit;
     @Autowired RabbitAdmin admin;@Autowired RabbitListenerEndpointRegistry listeners;
     private final List<Long> users=new ArrayList<>();private final Set<Long> conversations=new HashSet<>();
     record Person(Identity identity,String account) {}
@@ -84,11 +85,34 @@ class ChatIntegrationTest {
         assertThat(mapper.byClient(a.identity().userId(),command.clientMsgId())).isNull();
         var sent=chat.send(a.identity(),command);
         String event=jdbc.queryForObject("SELECT event_id FROM message_outbox WHERE message_id=?",String.class,sent.id());
+        // 模拟 broker 发布不可用：消息仍存在，Outbox 必须保留为可重试状态。
+        var unavailable=mock(ConfirmedPublisher.class);
+        doThrow(new IllegalStateException("injected broker unavailable")).when(unavailable).publish(anyString(),anyString(),any(byte[].class),anyString());
+        var retrying=new OutboxPublisher(outbox,unavailable,topology,transactions,false);
+        for(int i=0;i<10;i++) retrying.publishBatch();
+        assertThat(jdbc.queryForObject("SELECT status FROM message_outbox WHERE event_id=?",String.class,event)).isEqualTo("PENDING");
+        assertThat(jdbc.queryForObject("SELECT attempts FROM message_outbox WHERE event_id=?",Integer.class,event)).isPositive();
+        assertThat(mapper.message(Long.parseLong(sent.id()))).isNotNull();
         jdbc.update("UPDATE message_outbox SET status='PUBLISHING',lease_token=?,lease_until=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 SECOND) WHERE event_id=?",UUID.randomUUID().toString(),event);
         for(int i=0;i<10;i++) publisher.publishBatch();
         assertThat(jdbc.queryForObject("SELECT status FROM message_outbox WHERE event_id=?",String.class,event)).isEqualTo("PUBLISHED");
         assertThat(outbox.published(event,UUID.randomUUID().toString())).isZero();
         assertThatThrownBy(()->confirmed.publish(topology.name("message.x"),"unbound.test",new byte[]{123,125},UUID.randomUUID().toString())).isInstanceOf(IllegalStateException.class);
+    }
+    @Test void poisonEventsReachDeadLetterAndRetryWaitsForBrokerTtl() throws Exception {
+        String poison=UUID.randomUUID().toString();
+        confirmed.publish(topology.name("message.x"),"message.created",new byte[]{123},poison);
+        var dead=rabbit.receive(topology.name("dispatch.dlq"),5000);
+        assertThat(dead).isNotNull();assertThat(dead.getMessageProperties().getMessageId()).isEqualTo(poison);
+        // 构造引用不存在消息的合法事件，经 5 秒重试队列回到分发后应转入死信。
+        String eventId=UUID.randomUUID().toString();
+        var event=new MessageEvent(1,"message.created",eventId,"9223372036854775807","1","1",1);
+        long started=System.nanoTime();
+        confirmed.publish(topology.name("retry.x"),"retry.5s",new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(event),eventId);
+        assertThat(rabbit.receive(topology.name("dispatch.dlq"),500)).isNull();
+        var expired=rabbit.receive(topology.name("dispatch.dlq"),10000);
+        assertThat(expired).isNotNull();assertThat(expired.getMessageProperties().getMessageId()).isEqualTo(eventId);
+        assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime()-started)).isGreaterThanOrEqualTo(4500);
     }
     @AfterAll void cleanup() {
         listeners.stop();
