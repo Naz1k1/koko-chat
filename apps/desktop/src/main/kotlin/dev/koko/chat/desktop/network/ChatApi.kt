@@ -9,7 +9,8 @@ import kotlinx.serialization.Serializable
 
 /** 单聊传输契约；排序和比较时将 seq 转为 Long，不能按字符串字典序排序。 */
 @Serializable data class ConversationInfo(val id:String,val peerId:String?,val account:String?,val nickname:String,
-    val membershipEpoch:String,val visibleFromSeq:String,val latestSeq:String,val type:String="DIRECT",val ownerId:String?=null)
+    val membershipEpoch:String,val visibleFromSeq:String,val latestSeq:String,val type:String="DIRECT",val ownerId:String?=null,
+    val lastReadSeq:String="0",val unreadCount:String="0",val peerLastReadSeq:String?=null)
 @Serializable data class ConversationPage(val conversations:List<ConversationInfo>,val nextCursor:String,val hasMore:Boolean)
 @Serializable data class ChatMessage(val id:String,val conversationId:String,val seq:String,val senderId:String,
     val clientMsgId:String,val type:String,val text:String,val serverTime:String)

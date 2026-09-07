@@ -1,0 +1,6 @@
+-- 用户已实际查看但服务端尚未确认的进度；同一成员周期仅保留最大值。
+CREATE TABLE pending_read (
+    conversation_id TEXT NOT NULL PRIMARY KEY,
+    epoch TEXT NOT NULL,
+    read_seq INTEGER NOT NULL
+);

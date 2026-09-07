@@ -80,7 +80,7 @@ class KtorImConnector(private val client: HttpClient) : ImConnector {
                 for (frame in socket.incoming) {
                     val value = readObject(frame)
                     value["requestId"]?.jsonPrimitive?.content?.let { responses.remove(it)?.complete(value) }
-                    if(value["type"]?.jsonPrimitive?.content=="MESSAGE" && !received.tryEmit(ImEvent(expected.sessionId,value))) error("IM 推送积压，重连后补拉")
+                    if(value["type"]?.jsonPrimitive?.content in setOf("MESSAGE","READ_UPDATE") && !received.tryEmit(ImEvent(expected.sessionId,value))) error("IM 推送积压，重连后补拉")
                     if (value["type"]?.jsonPrimitive?.content == "PONG" && value["requestId"]?.jsonPrimitive?.content == heartbeatId) lastPong.set(System.nanoTime())
                     if (value["type"]?.jsonPrimitive?.content == "ERROR" && value["code"]?.jsonPrimitive?.content == "UNAUTHENTICATED") throw ImAuthenticationLost()
                 }

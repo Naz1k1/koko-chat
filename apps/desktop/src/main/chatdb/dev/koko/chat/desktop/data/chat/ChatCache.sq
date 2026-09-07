@@ -24,6 +24,13 @@ CREATE TABLE pending_message (
     error TEXT
 );
 
+-- 用户已实际查看但服务端尚未确认的进度；同一成员周期仅保留最大值。
+CREATE TABLE pending_read (
+    conversation_id TEXT NOT NULL PRIMARY KEY,
+    epoch TEXT NOT NULL,
+    read_seq INTEGER NOT NULL
+);
+
 conversations:
 SELECT * FROM cached_conversation ORDER BY id;
 conversation:
@@ -60,3 +67,15 @@ invalidateAllPending:
 UPDATE pending_message SET status='FAILED',error='已退出会话，消息未发送' WHERE conversation_id=?;
 pendingById:
 SELECT * FROM pending_message WHERE client_msg_id=?;
+
+pendingReads:
+SELECT * FROM pending_read;
+pendingRead:
+SELECT * FROM pending_read WHERE conversation_id=?;
+putRead:
+INSERT OR REPLACE INTO pending_read VALUES (?, ?, ?);
+removeRead:
+DELETE FROM pending_read WHERE conversation_id=?;
+-- 计数使用所有缓存消息，不能受聊天窗口最近 200 条的展示上限影响。
+messagesAfter:
+SELECT * FROM cached_message WHERE conversation_id=? AND epoch=? AND seq>? ORDER BY seq;

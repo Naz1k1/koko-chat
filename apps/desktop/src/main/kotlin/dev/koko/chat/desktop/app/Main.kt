@@ -1,5 +1,6 @@
 package dev.koko.chat.desktop.app
 
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,7 +36,16 @@ fun main() {
             },
         ) {
             window.minimumSize = Dimension(960, 640)
-            DesktopApp(runtime.screenModel, closing)
+            var focused by remember { mutableStateOf(window.isFocused) }
+            DisposableEffect(window) {
+                val listener=object:java.awt.event.WindowAdapter() {
+                    override fun windowGainedFocus(event:java.awt.event.WindowEvent) { focused=true }
+                    override fun windowLostFocus(event:java.awt.event.WindowEvent) { focused=false }
+                }
+                window.addWindowFocusListener(listener)
+                onDispose { window.removeWindowFocusListener(listener) }
+            }
+            DesktopApp(runtime.screenModel, closing, focused)
         }
     }
 }

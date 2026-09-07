@@ -26,7 +26,18 @@ class ChatStore(directory:Path,server:String,private val userId:String,private v
         return ChatDatabase(JdbcSqliteDriver("jdbc:sqlite:$file",Properties(),ChatDatabase.Schema).also { driver=it }).also { database=it }
     }
     suspend fun conversations():List<ConversationInfo> = withContext(dispatcher) {
-        db().chatCacheQueries.conversations().executeAsList().map { json.decodeFromString<ConversationInfo>(it.payload) }
+        val q=db().chatCacheQueries
+        q.conversations().executeAsList().map { row ->
+            val info=json.decodeFromString<ConversationInfo>(row.payload)
+            val local=q.pendingRead(info.id).executeAsOneOrNull()?.takeIf { it.epoch==info.membershipEpoch }?.read_seq ?: 0L
+            val read=maxOf(info.lastReadSeq.toLong(),local)
+            val incoming=q.messagesAfter(info.id,info.membershipEpoch,info.lastReadSeq.toLong()).executeAsList()
+                .filter { json.decodeFromString<ChatMessage>(it.payload).senderId!=userId }
+            // 快照计数减去本机新阅读的前缀，再加尚未进入快照的新推送；自己的消息不计未读。
+            val newlyRead=incoming.count { it.seq<=read && it.seq<=info.latestSeq.toLong() }
+            val newlyArrived=incoming.count { it.seq>maxOf(read,info.latestSeq.toLong()) }
+            info.copy(lastReadSeq=read.toString(),unreadCount=maxOf(0L,info.unreadCount.toLong()-newlyRead+newlyArrived).toString())
+        }
     }
     suspend fun saveConversations(values:List<ConversationInfo>) = withContext(dispatcher) {
         val db=db();val q=db.chatCacheQueries
@@ -34,8 +45,14 @@ class ChatStore(directory:Path,server:String,private val userId:String,private v
             for(value in values) {
                 val previous=q.conversation(value.id).executeAsOneOrNull()
                 val same=previous?.epoch==value.membershipEpoch
-                if(previous!=null && !same) { q.clearMessages(value.id);q.invalidatePending(value.id,value.membershipEpoch) }
-                q.putConversation(value.id,value.membershipEpoch,json.encodeToString(value),if(same) previous.contiguous_seq else value.visibleFromSeq.toLong()-1)
+                if(previous!=null && !same) { q.clearMessages(value.id);q.removeRead(value.id);q.invalidatePending(value.id,value.membershipEpoch) }
+                val old=previous?.let { json.decodeFromString<ConversationInfo>(it.payload) }
+                // HTTP 与推送可能交错：同周期读位置和快照上界均不允许回退。
+                var accepted=if(same && (value.latestSeq.toLong()<old!!.latestSeq.toLong() || value.lastReadSeq.toLong()<old.lastReadSeq.toLong())) old else value
+                if(same && old?.peerLastReadSeq!=null) accepted=accepted.copy(peerLastReadSeq=maxOf(old.peerLastReadSeq.toLong(),accepted.peerLastReadSeq?.toLong()?:0L).toString())
+                q.putConversation(value.id,value.membershipEpoch,json.encodeToString(accepted),if(same) previous.contiguous_seq else value.visibleFromSeq.toLong()-1)
+                val pending=q.pendingRead(value.id).executeAsOneOrNull()
+                if(pending!=null && pending.epoch==accepted.membershipEpoch && pending.read_seq<=accepted.lastReadSeq.toLong()) q.removeRead(value.id)
             }
         }
     }
@@ -87,7 +104,28 @@ class ChatStore(directory:Path,server:String,private val userId:String,private v
     /** 撤销访问后清除收到的缓存，保留失败发送意图；重入必须使用新周期重新同步。 */
     suspend fun removeConversation(id:String) = withContext(dispatcher) {
         val db=db();val q=db.chatCacheQueries
-        db.transaction { q.clearMessages(id);q.invalidateAllPending(id);q.removeConversation(id) }
+        db.transaction { q.clearMessages(id);q.removeRead(id);q.invalidateAllPending(id);q.removeConversation(id) }
+    }
+    data class PendingRead(val conversationId:String,val epoch:String,val seq:Long)
+    /** 只有 UI 的可见消息回调才能创建阅读意图；同步、选中或收到消息都不能代替阅读。 */
+    suspend fun markRead(id:String,epoch:String,visibleSeq:Long) = withContext(dispatcher) {
+        val db=db();val q=db.chatCacheQueries
+        db.transaction {
+            val row=q.conversation(id).executeAsOneOrNull()
+            if(row!=null && row.epoch==epoch) {
+                val info=json.decodeFromString<ConversationInfo>(row.payload)
+                val seq=minOf(visibleSeq,row.contiguous_seq)
+                val pending=q.pendingRead(id).executeAsOneOrNull()?.read_seq ?: 0L
+                if(seq>maxOf(info.lastReadSeq.toLong(),pending)) q.putRead(id,epoch,seq)
+            }
+        }
+    }
+    suspend fun pendingReads():List<PendingRead> = withContext(dispatcher) {
+        db().chatCacheQueries.pendingReads().executeAsList().map { PendingRead(it.conversation_id,it.epoch,it.read_seq) }
+    }
+    /** READ_ACK/READ_UPDATE 不得恢复已退出会话或覆盖重入后的新成员周期。 */
+    suspend fun saveReadSnapshot(info:ConversationInfo) = withContext(dispatcher) {
+        if(db().chatCacheQueries.conversation(info.id).executeAsOneOrNull()?.epoch==info.membershipEpoch) saveConversations(listOf(info))
     }
     suspend fun close() = withContext(dispatcher) { driver?.close();driver=null;database=null }
 }

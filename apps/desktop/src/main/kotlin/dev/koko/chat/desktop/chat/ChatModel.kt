@@ -37,6 +37,13 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
                                 connector.events.collect { event ->
                                     if(event.sessionId==current.sessionId) {
                                         try {
+                                            if(event.envelope["type"]?.jsonPrimitive?.content=="READ_UPDATE") {
+                                                current.sync.withLock {
+                                                    store.saveReadSnapshot(json.decodeFromJsonElement<ConversationInfo>(event.envelope.getValue("conversation")))
+                                                    refreshView(current)
+                                                }
+                                                return@collect
+                                            }
                                             val message=json.decodeFromJsonElement<ChatMessage>(event.envelope.getValue("message"))
                                             val epoch=event.envelope.getValue("membershipEpoch").jsonPrimitive.content
                                             if(store.conversations().none { it.id==message.conversationId && it.membershipEpoch==epoch }) sync(current)
@@ -46,7 +53,7 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
                                     }
                                 }
                             }
-                            launch { while(isActive) { flush(current);delay(2_000) } }
+                            launch { while(isActive) { flush(current);flushReads(current);delay(2_000) } }
                             awaitCancellation()
                         }
                     } catch(error:Exception) {
@@ -57,6 +64,14 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
                         withContext(NonCancellable) { store.close() }
                     }
                 }
+        }
+    }
+    fun readVisible(id:String,epoch:String,seq:Long) {
+        val current=binding?:return
+        if(state.value.selectedId!=id) return
+        current.scope.launch {
+            try { current.store.markRead(id,epoch,seq);refreshView(current) }
+            catch(error:Exception) { ensureActive();notice(current,"已读状态稍后重试") }
         }
     }
     fun select(id:String) { val current=binding?:return;current.scope.launch { refreshView(current,id) } }
@@ -150,6 +165,28 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
                 current.store.retry(pending.clientMsgId,permanent,if(permanent) error.message else "确认未收到，将使用原编号重试")
             }
             refreshView(current)
+        }
+    }
+    /** 先确认本机连续落盘位置，再提交持久化的 READ 意图；响应丢失后重发相同进度。 */
+    private suspend fun flushReads(current:Binding) {
+        if(sessions.state.value.phase!=SessionState.ONLINE) return
+        for(read in current.store.pendingReads()) {
+            try {
+                current.sync.withLock {
+                    val info=current.store.conversations().find { it.id==read.conversationId && it.membershipEpoch==read.epoch } ?: return@withLock
+                    ack(current,info.id,info.membershipEpoch,current.store.cursor(info.id))
+                    val result=connector.request(current.sessionId,buildJsonObject {
+                        put("type","READ");put("conversationId",info.id);put("membershipEpoch",info.membershipEpoch);put("readSeq",read.seq.toString())
+                    })
+                    require(result["type"]?.jsonPrimitive?.content=="READ_ACK")
+                    current.store.saveReadSnapshot(json.decodeFromJsonElement<ConversationInfo>(result.getValue("conversation")))
+                    refreshView(current)
+                }
+            } catch(error:Exception) {
+                currentCoroutineContext().ensureActive()
+                // 网络失败保留 SQLite 意图；成员失效交给下一次权威目录同步清理。
+                notice(current,"已读状态将在连接恢复后同步")
+            }
         }
     }
     private suspend fun refreshView(current:Binding,preferredId:String?=null) {
