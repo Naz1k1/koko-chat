@@ -217,4 +217,8 @@ Compose 的 jpackage/jlink 流程生成包含 Java 运行时的安装包，用�
 | 托盘隐藏、唤醒、主动退出 | 按定义保留或终止连接，无孤立重连任务 |
 | 各平台安装包启动 | JDBC、TLS、字体、图片和通知正常 |
 
-上表为完整聊天客户端的目标验收。当前骨架验证覆盖基础构建、设置存储、服务探针及 macOS 打包，尚未完成认证、消息收发和同步的端到端验收。
+上表为完整客户端的目标验收。当前已完成认证、消息、已读、历史、附件及语音的自动联调；系统窗口、真实音频设备和跨平台交互仍需设备验收，结果见各阶段 verification 文档。
+
+## 当前语音实现
+
+CallModel 订阅认证连接与 CALL_CHANGED，串行执行 SYNC / CREATE / ACCEPT / SIGNAL / CONNECTED / END。媒体事件带 callId，迟到回调不污染新通话；确认丢失保留呼叫及信令原编号，挂断先停止本机媒体再确认远端状态。VoiceEngine 封装原生 WebRTC，无浏览器或 JavaFX 依赖。详见 [语音契约](../contracts/voice-calls.md)。

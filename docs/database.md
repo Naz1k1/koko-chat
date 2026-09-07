@@ -1,6 +1,8 @@
 # 数据库文件与迁移说明
 
-数据库采用 MySQL 8.4、InnoDB、utf8mb4，首个 Flyway 版本建立 9 张业务表。SQL 中已包含中文表说明、字段说明、索引及约束。当前已实现认证、好友、文本单聊/群聊、已读/未读与 MQ 分发；好友申请和双向关系直接复用 V1 表，未改写已应用迁移。认证字段通过 V2 演进；V3 新增 group_command，V4 新增 attachment，当前共 11 张业务表。
+数据库采用 MySQL 8.4、InnoDB、utf8mb4，首个 Flyway 版本建立 9 张业务表。SQL 包含中文说明、索引及约束，旧迁移保持不变。V2 增加认证字段，V3 新增 group_command，V4 新增 attachment，V5 增加附件过期清理字段，V6 新增 call_session / call_signal，当前共 13 张业务表。
+
+当前新增迁移：[V5 附件回收](../server/src/main/resources/db/migration/V5__expire_unsent_attachments.sql)、[V6 语音通话](../server/src/main/resources/db/migration/V6__create_voice_calls.sql)。
 
 ## 文件入口
 
@@ -30,12 +32,14 @@
 | group_command | 成功群操作的请求摘要和群 ID | 用户+client_command_id 唯一；群外键约束 |
 | attachment | 上传元数据、文件摘要、所属会话/成员周期与绑定消息 | UUID 主键；object_key、message_id 唯一；状态/大小 CHECK；用户及会话外键 |
 | message_outbox | 与消息同事务提交的待发布事件 | 消息+事件类型唯一；待发布、过期租约、已发布清理索引 |
+| call_session | 呼叫、设备归属、连接确认及双方租约 | UUID 主键；参与者/状态与到期索引；用户及会话外键 |
+| call_signal | 有限信令邮箱，通话结束删除 | 自增 ID；call_id+sender_session+signal_id 唯一；按通话补拉 |
 
 好友申请的唯一键只约束 PENDING 记录。申请被接受、拒绝或取消后，生成列变为 NULL，允许未来再次申请；相反方向的新申请也不能绕过待处理限制。群聊共享 message 正文，不建立独立群消息表或离线消息正文表。
 
 ## 字段约定与事务边界
 
-- 业务 ID 为应用分配的正数 BIGINT，不依赖自增；范围与 Java Long 一致。JSON 中的 ID 和 seq 使用字符串，客户端按数值比较 seq。
+- 用户/会话/消息 ID 为应用分配的正数 BIGINT，JSON 使用十进制字符串；seq 同样使用字符串。附件、通话和信令幂等编号为 UUID；call_signal.id 是自增 BIGINT 邮箱游标，Java/Kotlin 使用 Long，协议使用整数。
 - 登录会话、成员周期、事件和认领令牌采用 UUID；设备标识和 client_msg_id 最大 64 个 ASCII 字符。协议标识按二进制排序规则精确比较，账号按 utf8mb4_0900_ai_ci 不区分大小写和重音，应用须统一规范化账号。
 - 密码使用带算法参数的安全密码哈希。refresh_token_hash 与 body_hash 使用 BINARY(32) 保存 SHA-256 原始摘要；刷新凭证应是高熵随机值。应用可用十六进制显示摘要，但不能把 64 字符十六进制文本直接当成 32 字节值。
 - DATETIME(3) 统一保存 UTC。当前 JDBC URL 已设置连接时区；手工写入数据的连接也需使用 UTC。
@@ -112,3 +116,11 @@ V1–V3 保持原样，V4 新增 attachment，并扩展 message.type 为 TEXT/EM
 SQLite [2.sqm](../apps/desktop/src/main/chatdb/dev/koko/chat/desktop/data/chat/2.sqm) 将消息库从 v2 升为 v3：pending_message 增加 attachment_id，pending_upload 保存可重发元数据；上传字节保存在账号哈希目录。已用包含消息的真实 v1 结构验证连续升级到 v3，原消息和游标保留。
 
 2026-09-08 已在真实 MySQL 8.4 独立临时库验证 V1–V4 首次执行和重复执行，共 11 张业务表；应用 local 数据库也已迁移到 V4。附件测试验证消息/附件/Outbox 回滚、重复发送和群成员可见范围，详见 [附件验收](attachment-verification.md)。本段为当前验证结论，上文首批建表的静态检查记录属于历史阶段。
+
+## V5 / V6：附件回收与语音
+
+V5 为 PENDING/READY 附件设置 expires_at，以 cleanup_at 标记对象回收完成时间。清理与消息绑定争用同一会话锁，只有未绑定对象能进入 EXPIRED；墓碑保留，拒绝旧上传编号。已清理墓碑每小时复扫，删除故障上传的晚到对象，不回收 ATTACHED。
+
+V6 新增 call_session 和 call_signal。CREATE 按双方用户 ID 排序加锁，串行判断占线；ACCEPT 锁定通话行，保证多设备只有一个接听赢家。结束状态与信令删除同事务，MQ 在提交后发状态提示，不存音频。通话元数据暂保留，没有历史查询页面。
+
+2026-09-08 已在独立 MySQL 8.4 临时库执行 V1–V6 与重复迁移验证，13 张业务表；local 库同样已到 V6。SQLite 仍为消息库 v3，缩略图只驻留内存，通话不进入持久化消息队列。结果见 [本轮验收](voice-verification.md)。

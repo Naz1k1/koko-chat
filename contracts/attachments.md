@@ -1,6 +1,6 @@
 # RustFS 附件与图片消息
 
-`local` 配置已实现，系统阶段为 `attachments`。附件字节经认证 HTTP 在桌面端、后端和 RustFS 之间传输；Netty / RabbitMQ 只传消息引用。开发限制为单文件 1 字节至 10 MiB，每个后端实例最多同时处理 4 个上传/下载。IMAGE 仅接受可解码的 PNG/JPEG，最多 4,194,304 像素；FILE 按 `application/octet-stream` 保存。
+`local` 配置已实现，系统阶段为 `voice-calls`。附件字节经认证 HTTP 在桌面端、后端和 RustFS 之间传输；Netty / RabbitMQ 只传消息引用。开发限制为单文件 1 字节至 10 MiB，每个后端实例最多同时处理 4 个上传/下载。IMAGE 仅接受可解码的 PNG/JPEG，最多 4,194,304 像素；FILE 按 `application/octet-stream` 保存。
 
 ## 登记与上传
 
@@ -25,7 +25,7 @@
 
 2. `PUT /api/attachments/{id}/content`，`Content-Type: application/octet-stream`，正文为原始字节。后端先验证本人、会话和周期，再读取有限大小的正文，验证长度、SHA-256 和图片类型，将对象写入 RustFS，最后更新元数据为 READY。相同内容再次 PUT 返回当前状态，READY/ATTACHED 时不重复写对象。客户端可先重复登记，若已 READY/ATTACHED，直接恢复 SEND。
 
-状态变化：`PENDING → READY → ATTACHED`。RustFS 写入不持有数据库事务，也不与 MySQL 构成分布式事务；写入失败保留 PENDING，写入成功但确认失败则按原编号、原对象键覆盖重试。上传后权限再次校验失败会保留可追踪的记录，不会成为可发送附件。
+状态变化：`PENDING → READY → ATTACHED`；未发送的 PENDING/READY 可转为 EXPIRED。RustFS 写入不持有数据库事务，也不与 MySQL 构成分布式事务；写入失败保留 PENDING，写入成功但确认失败则按原编号、原对象键覆盖重试。上传后权限再次校验失败会保留可追踪的记录，不会成为可发送附件。
 
 ## 发送消息
 
@@ -55,6 +55,16 @@ SEND_ACK、MESSAGE 和历史列表的 message 增加可空的 `attachment` 引�
 
 桌面端流式读取并限制累计大小，验证 SHA-256 后才预览或保存；保存位置由系统对话框选择，临时文件完整写入后替换目标，不自动执行文件。选择发送时先复制到账号专属目录，SQLite 记录元数据和发送意图；确认本机自己的消息成功落盘后才删除副本。永久失败保留副本与失败意图，重试不会改变成员周期。
 
+## 缩略图与过期清理
+
+IMAGE 上传时生成最长边不超过 320 像素的 JPEG 缩略图，不放大小图，透明区域铺白。原图保存在 `attachments/<id>`，缩略图保存在同一私有桶的 `thumbnails/<id>`，不改变原消息引用和摘要。`GET /api/attachments/{id}/thumbnail` 与原图下载使用同一权限检查，返回 image/jpeg、Content-Length、X-Content-SHA256、nosniff；旧图片首次访问时补生成。桌面限制响应 128 KiB 并校验摘要，在当前会话内最多缓存 32 张；切换会话或退出清空，点击仍可查看原图。
+
+登记时 expires_at 为 24 小时后，上传开始时保证至少剩余 10 分钟。服务端每 60 秒分批扫描过期 PENDING/READY，在与 SEND 相同的会话锁内确认未绑定并转为 EXPIRED，再于事务外删除原图和缩略图。ATTACHED 永不被此任务回收，已开始下载也不属于清理对象。
+
+EXPIRED 保留为墓碑，登记/上传重试返回 410 ATTACHMENT_EXPIRED，不再允许绑定消息。对象删除失败会重试；已删除记录每小时再检查一次，清除异常长上传或进程崩溃造成的晚到写入。对象存储与数据库不是原子事务，因此不能承诺到期即瞬间删除所有字节。每轮最多处理 100 条，到期较多时逐轮推进。若用户仍想发送已过期内容，应重新选择附件生成新上传编号。
+
+清理范围是服务器上的未发送附件。本机永久失败副本仍保留，避免自动删除用户唯一的文件副本；当前没有本机草稿删除界面、存储配额和失去元数据对象的全桶扫描。
+
 ## 错误与当前边界
 
 | HTTP / 业务码 | 含义 |
@@ -65,7 +75,8 @@ SEND_ACK、MESSAGE 和历史列表的 message 增加可空的 `attachment` 引�
 | 404 ATTACHMENT_NOT_FOUND | 附件不存在，或不是当前上传者的记录 |
 | 409 UPLOAD_CONFLICT / MEMBERSHIP_CHANGED | 原编号元数据不一致或成员周期变化 |
 | 409 ATTACHMENT_NOT_READY / ATTACHMENT_USED | 尚未上传、归属不符或重复绑定 |
+| 410 ATTACHMENT_EXPIRED | 上传已过期，请重新选择附件 |
 | 413 FILE_SIZE_MISMATCH | 实际大小与声明不一致；过滤器拒绝超限请求时可只返回 HTTP 413 |
 | 429 TRANSFER_BUSY / 503 STORAGE_UNAVAILABLE | 保留原编号稍后重试 |
 
-本轮没有实现缩略图、分片续传、病毒扫描、存储配额、弃用附件的定时清理和远程撤回本地文件。PENDING/READY 元数据和无绑定对象目前保留，生产使用前需制定清理期限与配额；不能直接删除所有无绑定记录，因为上传与重试可能仍在执行。
+当前没有分片续传、病毒扫描、存储配额或远程撤回本地文件。过期清理仅处理有元数据且未绑定消息的对象，不删除已发送附件。

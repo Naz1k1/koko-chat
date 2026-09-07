@@ -2,7 +2,7 @@
 
 后端默认骨架模式不依赖 Docker。需要验证 `local` 配置时，再启动 MySQL 8.4、Redis 7.4、RabbitMQ 4.2、RustFS 1.0.0-rc.5；这些都是独立开发服务。
 
-业务表由后端 Flyway V1–V4 顺序迁移建立，Compose 仅负责创建空库和中间件。使用已有 MySQL 实例时，可参考 [数据库说明](../docs/database.md) 和 [建库脚本](mysql/00-create-database.sql)。
+业务表由后端 Flyway V1–V6 顺序迁移建立，Compose 仅负责创建空库和中间件。使用已有 MySQL 实例时，可参考 [数据库说明](../docs/database.md) 和 [建库脚本](mysql/00-create-database.sql)。
 
 在仓库根目录执行：
 
@@ -55,3 +55,25 @@ docker compose --env-file deploy/.env -f deploy/compose.yaml down
 - `docker compose down` 保留对象；`down -v` 会删除命名卷及数据，不用于日常停止服务。
 
 本轮固定使用官方候选版本 `rustfs/rustfs:1.0.0-rc.5`，不是稳定版承诺；此单节点部署用于开发联调。Java 接入使用 AWS SDK v2 2.54.13、S3 v4 签名和 path-style，保留默认 TLS 校验。依据：[官方 Docker 部署](https://docs.rustfs.com/en/installation/container/docker)、[Java SDK 指南](https://docs.rustfs.com/en/developer/sdk/java)、[RC.5 发布记录](https://github.com/rustfs/rustfs/releases/tag/1.0.0-rc.5)。
+
+## 本机语音中继
+
+单机语音直连无需 TURN；强制中继测试需启动可选的 coturn 4.17.2-r0。已有 deploy/.env 补齐以下字段：
+
+```dotenv
+KOKO_TURN_URLS=turn:127.0.0.1:3478?transport=udp
+KOKO_TURN_SECRET=替换为足够长的随机密钥
+TURN_EXTERNAL_IP=127.0.0.1
+```
+
+密钥同时提供给后端和 coturn，保持 .env 未跟踪且权限 600。启动命令：
+
+```bash
+docker compose --env-file deploy/.env -f deploy/compose.yaml --profile calls up -d coturn
+```
+
+TURN 控制端口 3478 UDP/TCP、中继端口 49160–49179 UDP 均只映射回环地址。容器动态使用自己的实际网卡地址作为 relay-ip；不能绑定 0.0.0.0 作为中继地址，否则 external-ip 映射可能令权限检查收到零地址而拒绝。模板允许 loopback peer，并关闭 TLS，仅用于本机两个客户端测试；不应直接开放到公网。每凭证最多 4 个分配，总分配上限 40，这是开发限额。
+
+多台机器或公网部署需配置可达域名/IP、实际中继地址及端口范围，移除 allow-loopback-peers，按需求配置 TLS、证书、网络出口限制与带宽容量。当前尚未执行公网和双物理机验收，不能把本机 Docker 测试当作公网可用性证明。参考 [coturn 官方项目](https://github.com/coturn/coturn) 与 [4.17.2 发布](https://github.com/coturn/coturn/releases/tag/4.17.2)。
+
+缩略图与原图共享 RustFS 卷，分别使用 thumbnails/ 和 attachments/ 前缀。未发送上传默认 24 小时到期，后台自动回收字节并保留 EXPIRED 墓碑；已发送对象不会被该任务删除，详见 [附件契约](../contracts/attachments.md)。

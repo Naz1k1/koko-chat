@@ -220,3 +220,9 @@ MQ 不可用时允许在配置的 outbox 积压阈值内继续保存；阈值之
 ## 附件消息的队列边界
 
 RustFS 保存图片与文件字节，RabbitMQ 仍只收到引用 messageId 的 message.created 事件。消费者从 MySQL 读取已绑定的附件元数据，再经当前网关投递 IMAGE/FILE 消息；上传中或 READY 未发送的附件不会进入 MQ。附件绑定与 message/Outbox 原子提交，消息去重、重试、离线补拉与已读均沿用现有链路。客户端下载需重新向业务 HTTP 接口申请，不能凭 MQ 元数据匿名读取 RustFS。
+
+## 语音通话提示
+
+CALL_CHANGED 复用 Redis 路由和 RabbitMQ 网关交换机，携带目标设备，不携带媒体或 SDP。通话事务提交后发布，网关检查认证 session 再推送空提示；客户端以 SYNC 读取 MySQL 权威状态。提示允许丢失，由 2 秒轮询补齐，不套用持久消息 Outbox 的送达语义，避免离线用户重新上线后收到过期来电。
+
+OFFER / ANSWER / ICE 通过认证 Netty CALL 写入 call_signal，按游标补拉，结束时清理；音频不走 MQ。见 [语音协议](../contracts/voice-calls.md)。

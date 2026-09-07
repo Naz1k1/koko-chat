@@ -13,7 +13,7 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 
 也可执行 `java -jar target/koko-chat-server-0.1.0-SNAPSHOT.jar`。默认 `skeleton` profile 不创建 MySQL、Redis、RabbitMQ 客户端，因此无需启动中间件。
 
-- `GET http://127.0.0.1:8080/api/system/info`：`{name, version, stage, httpPort, imPort, imPath}`，`stage` 在默认模式为 `skeleton`，`local` 为 `attachments`。
+- `GET http://127.0.0.1:8080/api/system/info`：`{name, version, stage, httpPort, imPort, imPath}`，`stage` 在默认模式为 `skeleton`，`local` 为 `voice-calls`。
 - `GET http://127.0.0.1:8080/actuator/health`：进程及 Netty 正常时返回 `{"status":"UP"}`。
 - `ws://127.0.0.1:8081/im`：WebSocket 握手、控制帧 PING/PONG、JSON v1 应用心跳。TLS 由后续部署入口终止，本地骨架使用 HTTP / WS。
 
@@ -66,3 +66,9 @@ MySQL、Redis、RabbitMQ 的开发实例已通过真实健康检查；健康检�
 `attachment` 包采用 Controller → Service → Mapper 常规分层，`RustFsStorage` 通过 AWS SDK v2 连接私有桶。上传校验长度、摘要与图片格式；MySQL 附件绑定和消息/Outbox 同事务；下载重新校验当前成员及可见序号。HTTP 转传文件字节，Netty 和 RabbitMQ 仍负责消息引用。参数和错误码见 [附件契约](../contracts/attachments.md)，环境和物理存储位置见 [部署说明](../deploy/README.md)。
 
 真实附件测试包含在 `verify-auth.sh`，需要 RustFS 启动且 `.env` 有对应凭证。`AttachmentTestCleanup` 仅供桌面联调脚本定向清理本次随机测试账号的对象，不是运行时接口或通用垃圾回收器。
+
+## 语音、缩略图与附件回收
+
+新增 call 包，使用普通 Controller / Service / Mapper 分层。认证 Netty CALL 命令维护一对一呼叫状态、设备占用和幂等信令邮箱；RabbitMQ 推送 CALL_CHANGED 提示，客户端每 2 秒补拉状态。音频由 WebRTC 直连或 coturn 中继，不经过 Netty/MQ/RustFS。认证 HTTP `/api/calls/config` 只下发限时 TURN 凭证。local 系统阶段更新为 voice-calls。
+
+V5 增加附件回收，V6 增加通话与信令表。上传图片生成私有 JPEG 缩略图，旧图首次访问补生成。清理每 60 秒运行，先在会话锁内转 EXPIRED，再删除原图与缩略图；失败重试，ATTACHED 不参与。见 [附件协议](../contracts/attachments.md) 和 [语音协议](../contracts/voice-calls.md)。

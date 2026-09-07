@@ -331,4 +331,10 @@ Spring Boot 3.5.x 支持 Java 21，可作为这一设计的 3.x 基线；实施�
 
 服务端增加 attachment 业务包，仍使用普通 Controller / Handler → Service → Mapper，不引入 DDD 或单独微服务。RustFS 作为 S3 对象存储，MySQL 保留文件归属和消息引用，Redis/Netty 会话及 RabbitMQ 分发职责不变。先登记并转存文件，随后将附件绑定与 message/Outbox 同事务提交；数据库不与 S3 做跨资源事务，失败依赖原编号与不可变内容重试。下载每次从业务权限入口进入。
 
-桌面 Kotlin / Compose 使用系统文件选择器、账号独立副本与 SQLite 待发送记录；可以预览图片和保存文件。详细状态、错误与边界见 [附件契约](../contracts/attachments.md)。原首期架构图属于设计基线，本节描述当前增加的 RustFS 实现；缩略图、续传、配额和孤立对象清理尚未实现。
+桌面 Kotlin / Compose 使用系统文件选择器、账号独立副本与 SQLite 待发送记录；可以预览图片和保存文件。详细状态、错误与边界见 [附件契约](../contracts/attachments.md)。原首期架构图属于设计基线，本节描述当前增加的 RustFS 实现；缩略图和有元数据的未发送附件清理已实现；续传、配额和失去元数据对象的全桶扫描尚未实现。
+
+## 已落地补充：一对一语音
+
+桌面保留 Kotlin/Compose，增加原生 WebRTC。Netty CALL 负责状态与协商信令，MySQL 保存状态及有界信令邮箱，RabbitMQ 按在线路由发变化提示；客户端每 2 秒同步补齐。音频在两端之间传输，直连不可用时由 coturn 转发。RustFS 负责附件和缩略图。首期图仍为历史基线，未画入本轮语音组件。
+
+后端不引入 DDD 或新微服务。CallService 用用户行锁解决跨会话占线竞争，用通话行锁决定多设备接听归属，终态不重新激活。客户端媒体与认证连接生命周期绑定。当前完成语音单聊，视频仅做过设备枚举，没有摄像头画面或视频按钮。详见 [协议](../contracts/voice-calls.md) 和 [验收](voice-verification.md)。
