@@ -21,7 +21,8 @@ CREATE TABLE pending_message (
     created_at INTEGER NOT NULL,
     next_attempt_at INTEGER NOT NULL,
     status TEXT NOT NULL,
-    error TEXT
+    error TEXT,
+    attachment_id TEXT
 );
 
 -- 用户已实际查看但服务端尚未确认的进度；同一成员周期仅保留最大值。
@@ -48,7 +49,7 @@ DELETE FROM cached_message WHERE conversation_id=?;
 advance:
 UPDATE cached_conversation SET contiguous_seq=? WHERE id=? AND epoch=?;
 putPending:
-INSERT INTO pending_message VALUES (?, ?, ?, ?, ?, ?, 'PENDING', NULL);
+INSERT INTO pending_message (client_msg_id,conversation_id,epoch,text,created_at,next_attempt_at,status,error) VALUES (?, ?, ?, ?, ?, ?, 'PENDING', NULL);
 pending:
 SELECT * FROM pending_message ORDER BY created_at,client_msg_id;
 duePending:
@@ -87,3 +88,17 @@ messagesFrom:
 SELECT * FROM cached_message WHERE conversation_id=? AND epoch=? AND seq>=? ORDER BY seq;
 hasMessagesBefore:
 SELECT EXISTS(SELECT 1 FROM cached_message WHERE conversation_id=? AND epoch=? AND seq>=? AND seq<?);
+
+-- 上传元数据和不可变本机副本共同保留，响应丢失后沿用同一编号。
+CREATE TABLE pending_upload (
+    client_msg_id TEXT NOT NULL PRIMARY KEY,
+    payload TEXT NOT NULL
+);
+putUpload:
+INSERT INTO pending_upload VALUES (?, ?);
+upload:
+SELECT payload FROM pending_upload WHERE client_msg_id=?;
+removeUpload:
+DELETE FROM pending_upload WHERE client_msg_id=?;
+setAttachment:
+UPDATE pending_message SET attachment_id=? WHERE client_msg_id=?;

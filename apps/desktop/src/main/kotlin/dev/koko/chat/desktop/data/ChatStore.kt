@@ -19,7 +19,7 @@ class ChatStore(directory:Path,server:String,private val userId:String,private v
     private var driver:JdbcSqliteDriver?=null
     private var database:ChatDatabase?=null
     private val json=Json { ignoreUnknownKeys=true }
-    data class Pending(val clientMsgId:String,val conversationId:String,val epoch:String,val text:String,val status:String,val error:String?)
+    data class Pending(val clientMsgId:String,val conversationId:String,val epoch:String,val text:String,val status:String,val error:String?,val attachmentId:String?=null)
     private fun db():ChatDatabase {
         database?.let { return it }
         Files.createDirectories(file.parent)
@@ -59,7 +59,8 @@ class ChatStore(directory:Path,server:String,private val userId:String,private v
     suspend fun cursor(id:String):Long = withContext(dispatcher) { db().chatCacheQueries.conversation(id).executeAsOne().contiguous_seq }
     suspend fun saveMessages(id:String,epoch:String,messages:List<ChatMessage>):Long = withContext(dispatcher) {
         val db=db();val q=db.chatCacheQueries
-        db.transactionWithResult {
+        val completed=mutableListOf<String>()
+        val cursor=db.transactionWithResult {
             val conversation=q.conversation(id).executeAsOne()
             require(conversation.epoch==epoch) { "成员周期不一致，请重新同步" }
             val info=json.decodeFromString<ConversationInfo>(conversation.payload)
@@ -68,7 +69,10 @@ class ChatStore(directory:Path,server:String,private val userId:String,private v
                 val old=q.messageAt(id,epoch,message.seq.toLong()).executeAsOneOrNull()
                 require(old==null || old.id==message.id) { "同一序号收到不同消息" }
                 q.putMessage(message.id,id,epoch,message.seq.toLong(),json.encodeToString(message))
-                if(message.senderId==userId) q.removePending(message.clientMsgId)
+                if(message.senderId==userId) {
+                    if(q.upload(message.clientMsgId).executeAsOneOrNull()!=null) completed.add(message.clientMsgId)
+                    q.removePending(message.clientMsgId);q.removeUpload(message.clientMsgId)
+                }
             }
             var cursor=conversation.contiguous_seq
             // 乱序推送不能直接取 MAX(seq)，必须等缺口补齐后才推进连续游标。
@@ -76,6 +80,9 @@ class ChatStore(directory:Path,server:String,private val userId:String,private v
             q.advance(cursor,id,epoch)
             cursor
         }
+        // 只能在事务提交后删除本机副本，回滚时仍可重发；删除失败不影响已落盘的消息。
+        for(upload in completed) runCatching { Files.deleteIfExists(uploadPath(upload)) }
+        cursor
     }
     data class MessageWindow(val messages:List<ChatMessage>,val hasOlder:Boolean)
     /** 默认展示最近 200 条；用户展开历史后固定起点，刷新与新消息不能收回已加载的内容。 */
@@ -109,10 +116,42 @@ class ChatStore(directory:Path,server:String,private val userId:String,private v
         val id=UUID.randomUUID().toString();val now=System.currentTimeMillis()
         db().chatCacheQueries.putPending(id,info.id,info.membershipEpoch,text,now,now);id
     }
+    private fun uploadPath(id:String):Path {
+        require(id.matches(Regex("[a-f0-9-]{36}")))
+        return file.parent.resolve("$key-files").resolve("$id.upload")
+    }
+    /** 先复制文件再提交发送意图，后续用户修改或删除原文件也不会改变重试内容。 */
+    suspend fun enqueueFile(info:ConversationInfo,path:Path,kind:String):String = withContext(dispatcher) {
+        require(kind in setOf("IMAGE","FILE"))
+        require(Files.isRegularFile(path) && Files.size(path) in 1..10*1024*1024) { "请选择 1 字节至 10 MiB 的文件" }
+        val bytes=Files.newInputStream(path).use { it.readNBytes(10*1024*1024+1) }
+        require(bytes.size in 1..10*1024*1024) { "文件大小已变化，请重新选择" }
+        val name=path.fileName.toString()
+        require(name.length<=180 && name.none { it.isISOControl() || it=='/' || it=='\\' }) { "文件名过长或含不支持的字符" }
+        val id=UUID.randomUUID().toString();val target=uploadPath(id);Files.createDirectories(target.parent)
+        val metadata=UploadCreate(id,info.membershipEpoch,name,bytes.size.toLong(),fileHash(bytes),kind)
+        try {
+            Files.write(target,bytes,java.nio.file.StandardOpenOption.CREATE_NEW)
+            val db=db();val q=db.chatCacheQueries;val now=System.currentTimeMillis()
+            db.transaction {
+                require(q.conversation(info.id).executeAsOneOrNull()?.epoch==info.membershipEpoch) { "成员周期已变化，请重新选择" }
+                q.putPending(id,info.id,info.membershipEpoch,(if(kind=="IMAGE") "[图片] " else "[文件] ")+name,now,now)
+                q.setAttachment(id,id);q.putUpload(id,json.encodeToString(metadata))
+            }
+        } catch(error:Exception) { Files.deleteIfExists(target);throw error }
+        id
+    }
+    data class Upload(val metadata:UploadCreate,val bytes:ByteArray)
+    suspend fun upload(id:String):Upload = withContext(dispatcher) {
+        val metadata=json.decodeFromString<UploadCreate>(db().chatCacheQueries.upload(id).executeAsOne())
+        val bytes=Files.newInputStream(uploadPath(id)).use { it.readNBytes(10*1024*1024+1) }
+        require(bytes.size.toLong()==metadata.size && fileHash(bytes)==metadata.sha256) { "本机附件副本损坏，请重新选择文件" }
+        Upload(metadata,bytes)
+    }
     suspend fun pending(dueOnly:Boolean=false):List<Pending> = withContext(dispatcher) {
         val q=db().chatCacheQueries
-        if(dueOnly) q.duePending(System.currentTimeMillis()).executeAsList().map { Pending(it.client_msg_id,it.conversation_id,it.epoch,it.text,it.status,it.error) }
-        else q.pending().executeAsList().map { Pending(it.client_msg_id,it.conversation_id,it.epoch,it.text,it.status,it.error) }
+        if(dueOnly) q.duePending(System.currentTimeMillis()).executeAsList().map { Pending(it.client_msg_id,it.conversation_id,it.epoch,it.text,it.status,it.error,it.attachment_id) }
+        else q.pending().executeAsList().map { Pending(it.client_msg_id,it.conversation_id,it.epoch,it.text,it.status,it.error,it.attachment_id) }
     }
     suspend fun retry(id:String,permanent:Boolean,error:String?) = withContext(dispatcher) {
         val db=db();val q=db.chatCacheQueries

@@ -1,0 +1,6 @@
+-- 保留已有文字发送意图，并增加附件重试元数据。
+ALTER TABLE pending_message ADD COLUMN attachment_id TEXT;
+CREATE TABLE pending_upload (
+    client_msg_id TEXT NOT NULL PRIMARY KEY,
+    payload TEXT NOT NULL
+);

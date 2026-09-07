@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
     val lastReadSeq:String="0",val unreadCount:String="0",val peerLastReadSeq:String?=null)
 @Serializable data class ConversationPage(val conversations:List<ConversationInfo>,val nextCursor:String,val hasMore:Boolean)
 @Serializable data class ChatMessage(val id:String,val conversationId:String,val seq:String,val senderId:String,
-    val clientMsgId:String,val type:String,val text:String,val serverTime:String)
+    val clientMsgId:String,val type:String,val text:String,val serverTime:String,val attachment:AttachmentReference?=null)
 @Serializable data class MessagePage(val messages:List<ChatMessage>,val membershipEpoch:String,val visibleFromSeq:String,
     val toSeq:String,val nextCursor:String,val hasMore:Boolean)
 @Serializable private data class DirectBody(val account:String)

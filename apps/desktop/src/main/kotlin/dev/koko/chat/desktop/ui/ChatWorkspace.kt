@@ -9,6 +9,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toComposeImageBitmap
+import dev.koko.chat.desktop.platform.FileDialogs
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -43,7 +45,7 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
     }
     val currentMessages by rememberUpdatedState(state.messages)
     val reportRead by rememberUpdatedState(onReadVisible)
-    val reading=windowFocused && !closing && !settingsOpen && !showContacts && groups.dialog==null
+    val reading=windowFocused && !closing && !settingsOpen && !showContacts && groups.dialog==null && state.preview==null
     LaunchedEffect(reading,selected?.id,selected?.membershipEpoch,state.messages) {
         if(reading && selected!=null) snapshotFlow {
             if(list.isScrollInProgress) null else list.layoutInfo.visibleItemsInfo
@@ -118,6 +120,13 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
                     val sender=if(selected.type=="GROUP") groups.detail?.takeIf { it.id==selected.id }?.members?.find { it.userId==message.senderId }?.nickname ?: "成员 ${message.senderId}" else selected.nickname
                     val status=if(!mine) sender else if(selected.type=="DIRECT" && message.seq.toLong()<=(selected.peerLastReadSeq?.toLong()?:0L)) "对方已读" else "已保存到服务器"
                     MessageBubble(message.text,status,mine)
+                    message.attachment?.let { attachment ->
+                        Row(Modifier.fillMaxWidth(),horizontalArrangement=if(mine) Arrangement.End else Arrangement.Start) {
+                            Text("%.1f KiB".format(attachment.size/1024.0),fontSize=11.sp,modifier=Modifier.align(Alignment.CenterVertically))
+                            if(attachment.kind=="IMAGE") TextButton({model.openAttachment(message)},enabled=!closing && !state.attachmentBusy) { Text("查看图片") }
+                            TextButton({FileDialogs.save(attachment.name)?.let { model.openAttachment(message,it) }},enabled=!closing && !state.attachmentBusy) { Text("保存文件") }
+                        }
+                    }
                 }
                 items(state.pending,key={"pending-${it.clientMsgId}"}) { pending ->
                     Column(Modifier.fillMaxWidth(),horizontalAlignment=Alignment.End) {
@@ -132,8 +141,18 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
                     modifier=Modifier.weight(1f).heightIn(min=88.dp,max=144.dp),maxLines=5)
                 Button(onClick={val text=draft;model.sendMessage(text) { if(draft==text) draft="" }},enabled=selected!=null && draft.isNotBlank() && !closing && !state.creating) { Text("发送") }
             }
-            Text("断线时消息会保存在本机，连接恢复后自动发送。",fontSize=10.sp,color=Color(0xFF77817D))
+            Row(verticalAlignment=Alignment.CenterVertically,horizontalArrangement=Arrangement.spacedBy(8.dp)) {
+                TextButton({FileDialogs.choose(true)?.let { model.sendFile(it,"IMAGE") }},enabled=selected!=null && !closing && !state.attachmentBusy) { Text("图片") }
+                TextButton({FileDialogs.choose(false)?.let { model.sendFile(it,"FILE") }},enabled=selected!=null && !closing && !state.attachmentBusy) { Text("文件") }
+                Text(if(state.attachmentBusy) "正在处理附件…" else "最多 10 MiB · 断线后自动重试",fontSize=10.sp,color=Color(0xFF77817D))
+            }
         }
+    }
+    state.preview?.let { preview ->
+        val bitmap=remember(preview) { runCatching { org.jetbrains.skia.Image.makeFromEncoded(preview.bytes).toComposeImageBitmap() }.getOrNull() }
+        AlertDialog(onDismissRequest=model::closeAttachmentPreview,title={Text(preview.attachment.name,maxLines=2)},
+            text={ if(bitmap!=null) Image(bitmap,preview.attachment.name,Modifier.widthIn(max=600.dp).heightIn(max=420.dp)) else Text("图片解码失败，请保存文件后查看") },
+            confirmButton={TextButton(model::closeAttachmentPreview) { Text("关闭") }})
     }
 }
 

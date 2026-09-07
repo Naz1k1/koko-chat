@@ -16,9 +16,10 @@ data class ChatUiState(val conversations:List<ConversationInfo> = emptyList(),va
     val messages:List<ChatMessage> = emptyList(),val pending:List<ChatStore.Pending> = emptyList(),
     val notice:String="正在同步会话…",val creating:Boolean=false,
     val hasOlderMessages:Boolean=false,val loadingOlder:Boolean=false,val historyError:String?=null,
-    val latestRevision:Long=0)
+    val latestRevision:Long=0,val attachmentBusy:Boolean=false,val preview:AttachmentPreview?=null)
+data class AttachmentPreview(val attachment:AttachmentReference,val bytes:ByteArray)
 class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,private val connector:ImConnector,
-    private val api:ChatApi,private val directory:Path,private val dispatcher:CoroutineDispatcher) {
+    private val api:ChatApi,private val directory:Path,private val dispatcher:CoroutineDispatcher,private val attachments:AttachmentApi?=null) {
     private val job=SupervisorJob(parent.coroutineContext[Job]);private val scope=CoroutineScope(parent.coroutineContext+job)
     private val mutable=MutableStateFlow(ChatUiState());val state:StateFlow<ChatUiState> = mutable.asStateFlow()
     private val json=Json { ignoreUnknownKeys=true }
@@ -146,6 +147,43 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
             catch(error:Exception) { ensureActive();notice(current,error.message?:"无法保存待发送消息") }
         }
     }
+    fun sendFile(path:Path,kind:String) {
+        val current=binding?:return;val info=state.value.conversations.find { it.id==state.value.selectedId }?:return
+        if(state.value.attachmentBusy) return
+        mutable.update { it.copy(attachmentBusy=true) }
+        current.scope.launch {
+            try { current.store.enqueueFile(info,path,kind);refreshView(current);notice(current,"附件已保存到本机，正在发送") }
+            catch(error:Exception) { ensureActive();notice(current,if(error is IllegalArgumentException) error.message?:"文件不合法" else "无法保存附件，请检查文件权限") }
+            finally { if(binding===current) mutable.update { it.copy(attachmentBusy=false) } }
+        }
+    }
+    fun closePreview() { mutable.update { it.copy(preview=null) } }
+    /** 每次打开或保存都重新请求权限；切换账号、会话或成员周期后丢弃迟到的结果。 */
+    fun attachment(message:ChatMessage,destination:Path?=null) {
+        val api=attachments?:return;val current=binding?:return;val file=message.attachment?:return
+        val key=current.windowKey;val navigation=current.navigation
+        if(state.value.attachmentBusy || state.value.messages.none { it.id==message.id } || (destination==null && file.kind!="IMAGE")) return
+        mutable.update { it.copy(attachmentBusy=true,preview=null) }
+        current.scope.launch {
+            try {
+                val bytes=sessions.withAccess { settings,token -> api.download(settings,token,file) }
+                if(binding!==current || current.windowKey!=key || current.navigation!=navigation) return@launch
+                if(destination==null) mutable.update { it.copy(preview=AttachmentPreview(file,bytes)) }
+                else {
+                    withContext(Dispatchers.IO) {
+                        // 临时文件完整写入后再替换用户明确选择的目标，避免留下半个文件。
+                        val target=destination.toAbsolutePath();val temporary=java.nio.file.Files.createTempFile(target.parent,".koko-download-",".tmp")
+                        try {
+                            java.nio.file.Files.write(temporary,bytes);ensureActive()
+                            java.nio.file.Files.move(temporary,target,java.nio.file.StandardCopyOption.REPLACE_EXISTING)
+                        } finally { java.nio.file.Files.deleteIfExists(temporary) }
+                    }
+                    notice(current,"文件已保存")
+                }
+            } catch(error:Exception) { ensureActive();notice(current,if(error is ResponseException && error.response.status.value in setOf(403,404)) "附件已不可访问，请刷新会话" else "附件读取或保存失败，请重试") }
+            finally { if(binding===current) mutable.update { it.copy(attachmentBusy=false) } }
+        }
+    }
     fun retry(id:String) { val current=binding?:return;current.scope.launch { current.store.retry(id,false,null);refreshView(current) } }
     /** 拉取固定 toSeq 的完整分页，不把服务端设备游标当成本机历史缓存。 */
     private suspend fun sync(current:Binding) = current.sync.withLock {
@@ -192,8 +230,13 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
         if(sessions.state.value.phase!=SessionState.ONLINE) return
         for(pending in current.store.pending(true)) {
             try {
+                if(pending.attachmentId!=null) {
+                    val api=checkNotNull(attachments) { "附件服务未配置" };val upload=current.store.upload(pending.clientMsgId)
+                    val registered=sessions.withAccess { settings,token -> api.create(settings,token,pending.conversationId,upload.metadata) }
+                    if(registered.status=="PENDING") sessions.withAccess { settings,token -> api.upload(settings,token,pending.attachmentId,upload.bytes) }
+                }
                 val result=connector.request(current.sessionId,buildJsonObject { put("type","SEND");put("conversationId",pending.conversationId)
-                    put("membershipEpoch",pending.epoch);put("clientMsgId",pending.clientMsgId);put("text",pending.text) })
+                    put("membershipEpoch",pending.epoch);put("clientMsgId",pending.clientMsgId);if(pending.attachmentId==null) put("text",pending.text) else put("attachmentId",pending.attachmentId) })
                 require(result["type"]?.jsonPrimitive?.content=="SEND_ACK")
                 val message=json.decodeFromJsonElement<ChatMessage>(result.getValue("message"))
                 require(message.senderId==current.userId && message.clientMsgId==pending.clientMsgId)
@@ -201,8 +244,10 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
                 ack(current,pending.conversationId,pending.epoch,cursor)
             } catch(error:Exception) {
                 currentCoroutineContext().ensureActive()
-                val permanent=error is ImCommandFailure && error.code in setOf("INVALID_MESSAGE","NOT_A_MEMBER","MEMBERSHIP_CHANGED","IDEMPOTENCY_CONFLICT")
-                current.store.retry(pending.clientMsgId,permanent,if(permanent) error.message else "确认未收到，将使用原编号重试")
+                val permanent=(error is ImCommandFailure && error.code in setOf("INVALID_MESSAGE","NOT_A_MEMBER","MEMBERSHIP_CHANGED","IDEMPOTENCY_CONFLICT","INVALID_ATTACHMENT","ATTACHMENT_USED","ATTACHMENT_NOT_READY")) ||
+                    (error is ResponseException && error.response.status.value in setOf(400,403,404,409,413,415)) ||
+                    (pending.attachmentId!=null && (error is IllegalArgumentException || error is java.nio.file.NoSuchFileException))
+                current.store.retry(pending.clientMsgId,permanent,if(permanent) { if(pending.attachmentId!=null) "发送被拒绝或文件已失效，请检查权限并重新选择文件" else error.message ?: "消息被拒绝，请检查会话权限" } else "确认未收到，将使用原编号重试")
             }
             refreshView(current)
         }
@@ -243,7 +288,7 @@ class ChatModel(parent:CoroutineScope,private val sessions:SessionManager,privat
         val pending=current.store.pending().filter { it.conversationId==selected }
         if(binding===current && state.value.selectedId==requested) mutable.update { it.copy(
             conversations=conversations,selectedId=selected,messages=window.messages,pending=pending,hasOlderMessages=window.hasOlder,
-            loadingOlder=if(changed) false else it.loadingOlder,historyError=if(changed) null else it.historyError) }
+            loadingOlder=if(changed) false else it.loadingOlder,historyError=if(changed) null else it.historyError,preview=if(changed) null else it.preview) }
     }
     private fun notice(current:Binding,text:String) { if(binding===current) mutable.update { it.copy(notice=text) } }
     suspend fun close() = job.cancelAndJoin()

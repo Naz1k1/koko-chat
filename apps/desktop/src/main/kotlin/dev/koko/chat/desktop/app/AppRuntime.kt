@@ -5,6 +5,7 @@ import dev.koko.chat.desktop.network.KtorGroupApi
 import dev.koko.chat.desktop.chat.ChatModel
 import dev.koko.chat.desktop.contact.ContactModel
 import dev.koko.chat.desktop.network.KtorContactApi
+import dev.koko.chat.desktop.network.KtorAttachmentApi
 import dev.koko.chat.desktop.network.KtorChatApi
 import dev.koko.chat.desktop.data.PreferencesStore
 import dev.koko.chat.desktop.network.KtorAuthApi
@@ -33,7 +34,7 @@ class AppRuntime {
     private val client = createHttpClient()
     private val connector = KtorImConnector(client)
     val sessions = SessionManager(scope, KtorAuthApi(client), connector, store::deviceId)
-    val chat = ChatModel(scope, sessions, connector, KtorChatApi(client), AppPaths.preferencesFile().parent.resolve("accounts"), databaseDispatcher)
+    val chat = ChatModel(scope, sessions, connector, KtorChatApi(client), AppPaths.preferencesFile().parent.resolve("accounts"), databaseDispatcher, KtorAttachmentApi(client))
     val contacts = ContactModel(scope, sessions, KtorContactApi(client))
     val groups = GroupModel(scope, sessions, chat, KtorGroupApi(client))
     val screenModel = DesktopScreenModel(scope, store, KtorServiceProbe(client), sessions, chat, contacts, groups)

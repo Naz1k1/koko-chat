@@ -84,6 +84,9 @@ class DesktopScreenModel(
     fun selectConversation(id:String) { chat?.select(id) }
     fun createConversation(account:String) { chat?.create(account) }
     fun sendMessage(text:String,onSaved:()->Unit) { chat?.send(text,onSaved) }
+    fun sendFile(path:java.nio.file.Path,kind:String) { chat?.sendFile(path,kind) }
+    fun openAttachment(message:dev.koko.chat.desktop.network.ChatMessage,path:java.nio.file.Path?=null) { chat?.attachment(message,path) }
+    fun closeAttachmentPreview() { chat?.closePreview() }
     fun retryMessage(id:String) { chat?.retry(id) }
 
     init {
