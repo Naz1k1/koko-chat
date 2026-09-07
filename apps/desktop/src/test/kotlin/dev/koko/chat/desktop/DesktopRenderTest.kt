@@ -11,6 +11,7 @@ import dev.koko.chat.desktop.ui.DesktopApp
 import dev.koko.chat.desktop.ui.ChatWorkspace
 import dev.koko.chat.desktop.chat.ChatUiState
 import dev.koko.chat.desktop.contact.ContactUiState
+import dev.koko.chat.desktop.group.GroupUiState
 import dev.koko.chat.desktop.session.*
 import dev.koko.chat.desktop.data.ChatStore
 import androidx.compose.material3.*
@@ -93,6 +94,27 @@ class DesktopRenderTest {
                             scene.render().use { image -> image.encodeToData()!!.use { data -> Files.write(directory.resolve("contacts-$file-$width.png"),data.bytes) } }
                         }
                     } finally { scene.close() }
+                }
+                val groupInfo=conversation.copy(id="20",peerId=null,account=null,nickname="Kotlin 学习小组",type="GROUP",ownerId="1")
+                val groupDetail=GroupDetail("20","Kotlin 学习小组","1","owner-epoch",listOf(
+                    GroupMember("1","yako","Yako","OWNER","owner-epoch"),
+                    GroupMember("2","xiaoyu","小雨","MEMBER","member-epoch"),
+                    GroupMember("3","luming","陆鸣","MEMBER","another-epoch")))
+                val groupChat=chat.copy(conversations=listOf(groupInfo),selectedId="20",messages=messages.map { it.copy(conversationId="20") },pending=emptyList())
+                val groupContacts=contacts.copy(friends=contacts.friends+FriendInfo("4","xiaolin","小林"))
+                for ((width,height) in listOf(1120 to 760,960 to 640)) {
+                    for ((mode,file) in listOf(null to "chat","CREATE" to "create","MANAGE" to "members")) {
+                        val scene=ImageComposeScene(width=width,height=height,coroutineContext=coroutineContext)
+                        try {
+                            scene.setContent {
+                                MaterialTheme(colorScheme=lightColorScheme(primary=Color(0xFF167565),background=Color(0xFFF6F8F6),surface=Color.White)) {
+                                    ChatWorkspace(session,groupChat,false,model,groupContacts,GroupUiState(detail=groupDetail,dialog=mode))
+                                }
+                            }
+                            scene.render().close();delay(100)
+                            scene.render().use { image -> image.encodeToData()!!.use { data -> Files.write(directory.resolve("group-$file-$width.png"),data.bytes) } }
+                        } finally { scene.close() }
+                    }
                 }
             } finally { model.close(); store.close() }
         }

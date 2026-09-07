@@ -46,6 +46,7 @@ public class GroupService {
     }
     public Result invite(Identity actor, String id, Invite body) {
         long group=ChatService.number(id,false); epoch(body.membershipEpoch()); var ids=ids(body.memberIds());
+        if(ids.isEmpty()) throw invalid();
         return execute(actor,body.clientCommandId(),List.of("INVITE",group,body.membershipEpoch(),ids),()->{
             var row=locked(actor,group,body.membershipEpoch(),true);
             var current=mapper.members(group).stream().map(m->Long.parseLong(m.userId())).toList();

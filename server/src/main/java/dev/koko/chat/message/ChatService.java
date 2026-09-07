@@ -68,8 +68,11 @@ public class ChatService {
         });
     }
     public ConversationView summary(Identity identity,String id) {
-        requireActive(identity);long conversation=number(id,false);member(identity,conversation,null);
-        return mapper.summary(conversation,identity.userId());
+        requireActive(identity);long conversation=number(id,false);
+        return tx.execute(status -> {
+            mapper.lockConversation(conversation);member(identity,conversation,null);
+            return mapper.summary(conversation,identity.userId());
+        });
     }
 
     public MessageView send(Identity identity,SendCommand command) {
