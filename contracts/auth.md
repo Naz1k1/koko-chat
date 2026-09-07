@@ -7,7 +7,7 @@
 | POST /api/auth/register | account、password、nickname | 201，用户 id（字符串）、account、nickname |
 | POST /api/auth/login | account、password、deviceId | 200，令牌对与用户信息 |
 | POST /api/auth/refresh | refreshToken | 200，新令牌对，旧令牌对立即失效 |
-| POST /api/auth/logout | refreshToken | 204，撤销登录会话；重复调用仍为 204 |
+| POST /api/auth/logout | refreshToken | 204，撤销登录会话；已知会话重复调用仍为 204；未知或已轮换令牌返回 401 |
 | GET /api/auth/me | Authorization: Bearer accessToken | 200，当前用户 |
 
 账号为 3–32 位 ASCII 字母、数字或下划线，服务端统一转为小写；密码为 8–128 个字符；昵称非空，最多 64 字符；deviceId 为 1–64 位字母、数字、下划线或连字符，桌面端使用本地持久化 UUID。
@@ -16,7 +16,7 @@
 
 密码使用带独立随机盐的 PBKDF2-HMAC-SHA256，由 Spring Security `Pbkdf2PasswordEncoder.defaultsForSpringSecurity_v5_8()` 实现，存储带 `{pbkdf2-v1}` 算法标识。选择依据：[Spring Security 密码存储文档](https://docs.spring.io/spring-security/reference/features/authentication/password-storage.html)。
 
-同账号同设备重新登录时，事务内撤销旧会话并创建新会话；不同设备互不影响。数据库行锁、活动设备唯一约束保证并发操作一致。刷新令牌只能轮换一次；如果刷新成功但响应丢失，客户端要求重新登录，避免自动重放不明确的刷新请求。
+同账号同设备重新登录时，事务内撤销旧会话并创建新会话；不同设备互不影响。认证事务使用 READ COMMITTED，避免首次并发登录空会话范围的间隙锁死锁；用户行锁与活动设备唯一约束保证同设备替换一致。刷新令牌只能轮换一次；如果刷新成功但响应丢失，客户端要求重新登录，避免自动重放不明确的刷新请求。
 
 校验失败 400；密码错误或令牌失效 401；账号重复 409；频率超限 429；存储暂不可用 503。注册/登录按账号每分钟 12 次、实际对端 IP 每分钟 60 次限制，Redis Lua 保证计数和过期原子执行。代理部署需要先配置可信代理，当前不采信客户端提供的转发地址。
 
@@ -31,3 +31,5 @@
 已认证连接支持 `PING → PONG`。同一登录会话仅保留一个本机连接；注销/同设备替换在数据库提交后关闭旧连接。每 5 秒通过业务线程池检查登录有效性，覆盖其他节点注销与认证期间撤销的竞态；最坏延迟还包含数据库查询超时。数据库不可用或业务线程池过载关闭 1013，失效会话关闭 1008。
 
 当前连接登记在本机内存中，尚未实现 Redis 跨节点在线路由、群聊、消息持久化或 RabbitMQ 分发。认证后的 SEND 仍返回 NOT_IMPLEMENTED，不发送虚假的保存成功确认。
+
+若刷新已在服务端成功，但响应丢失或被退出操作取消，旧刷新令牌的注销返回 401。客户端清除本地身份并提示服务端撤销未确认；同设备重新登录会替换此前会话。不会将未知令牌的请求误报为成功撤销。

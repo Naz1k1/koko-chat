@@ -57,6 +57,7 @@ class AuthIntegrationTest {
             assertThat(List.of(ra.getStatusCode().value(), rb.getStatusCode().value())).containsExactlyInAnyOrder(200,401);
         }
         assertThat(me(first).getStatusCode().value()).isEqualTo(401);
+        assertThat(post("/logout", Map.of("refreshToken", first.path("refreshToken").asText())).getStatusCode().value()).isEqualTo(401);
         var replaced = login(account, "desktop-a");
         var otherDevice = login(account, "desktop-b");
         var latest = login(account, "desktop-a");
@@ -66,6 +67,17 @@ class AuthIntegrationTest {
         assertThat(me(latest).getStatusCode().value()).isEqualTo(401);
         assertThat(post("/logout", Map.of("refreshToken", latest.path("refreshToken").asText())).getStatusCode().value()).isEqualTo(204);
         assertThat(post("/login", Map.of("account", "x", "password", "short", "deviceId", "desktop")).getStatusCode().value()).isEqualTo(400);
+    }
+
+    @Test void differentNewUsersCanLoginConcurrentlyWithoutGapLockDeadlock() throws Exception {
+        String a=register(), b=register();
+        try (ExecutorService pool=Executors.newFixedThreadPool(2)) {
+            var start=new CyclicBarrier(2);
+            var left=pool.submit(() -> { start.await(5,TimeUnit.SECONDS); return login(a,"fresh-device"); });
+            var right=pool.submit(() -> { start.await(5,TimeUnit.SECONDS); return login(b,"fresh-device"); });
+            assertThat(left.get(10,TimeUnit.SECONDS).has("accessToken")).isTrue();
+            assertThat(right.get(10,TimeUnit.SECONDS).has("accessToken")).isTrue();
+        }
     }
 
     @Test void twoClientsAuthenticateAndRevocationClosesSockets() throws Exception {

@@ -8,6 +8,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -32,6 +33,9 @@ public class AuthService {
 
     public AuthService(AuthMapper mapper, PlatformTransactionManager transactions, ApplicationEventPublisher events) {
         this.mapper = mapper; this.tx = new TransactionTemplate(transactions); this.events = events;
+        // 空设备会话范围不需要间隙锁：同账号登录已由用户行锁串行化，唯一约束继续兜底。
+        // 使用 RC 避免不同新用户同时撤销空范围后插入会话造成 RR 间隙锁死锁。
+        this.tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
     }
 
     public UserView register(RegisterRequest request) {
@@ -82,14 +86,13 @@ public class AuthService {
         });
     }
 
-    /** 注销允许已过期的刷新令牌；重复请求仍返回成功，但旧轮换令牌不能操作新会话。 */
+    /** 已知会话重复注销仍成功；轮换后未知的旧令牌返回 401，不能误报已撤销新会话。 */
     public void logout(String refreshToken) {
         tx.executeWithoutResult(status -> {
             SessionRow session = mapper.lockLogout(digest(refreshToken));
-            if (session != null) {
-                mapper.revoke(session.id());
-                events.publishEvent(new SessionsRevoked(List.of(session.id())));
-            }
+            if (session == null) throw AuthException.unauthorized();
+            mapper.revoke(session.id());
+            events.publishEvent(new SessionsRevoked(List.of(session.id())));
         });
     }
 
