@@ -1,13 +1,25 @@
-# 独立运行 Prometheus 时使用；每个后端节点都需添加一个抓取目标。
+# Docker Desktop 通过 targets.json 抓取宿主机后端；每个实例单独一个 target。
 global:
   scrape_interval: 15s
-rule_files:
-  - alerts.yml
+  evaluation_interval: 15s
+  external_labels: {project: koko-chat, environment: local}
+rule_files: [alerts.yml]
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['alertmanager:9093']
 scrape_configs:
   - job_name: koko-chat
     metrics_path: /internal/ops/metrics
     authorization:
       type: Bearer
       credentials_file: /etc/prometheus/secrets/koko-ops-token
+    file_sd_configs:
+      - files: [/etc/prometheus/targets.json]
+        refresh_interval: 30s
+  - job_name: prometheus
     static_configs:
-      - targets: ['127.0.0.1:8080']
+      - targets: ['127.0.0.1:9090']
+  - job_name: alertmanager
+    static_configs:
+      - targets: ['alertmanager:9093']

@@ -1,0 +1,18 @@
+{{ define "koko.subject" }}[koko-chat][{{ if eq .Status "firing" }}告警{{ else }}恢复{{ end }}] {{ .CommonLabels.alertname }}{{ end }}
+{{ define "koko.text" }}koko-chat 运维通知
+通知状态：{{ .Status }}
+{{ range .Alerts }}
+告警：{{ .Labels.alertname }}
+状态：{{ .Status }}
+级别：{{ .Labels.severity }}
+实例：{{ .Labels.instance }}
+环境：{{ .Labels.environment }}
+说明：{{ .Annotations.summary }}
+开始时间（UTC）：{{ .StartsAt }}
+{{ if eq .Status "resolved" }}结束时间（UTC）：{{ .EndsAt }}{{ end }}
+{{ end }}
+本机告警面板：http://127.0.0.1:9093
+本机指标面板：http://127.0.0.1:9090
+上述地址仅在运行监控的电脑上有效。请按运维手册检查依赖、积压和死信。
+{{ end }}
+{{ define "koko.html" }}<html><body><pre>{{ template "koko.text" . }}</pre></body></html>{{ end }}

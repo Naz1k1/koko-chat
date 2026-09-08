@@ -1,0 +1,52 @@
+# 独立监控项目；启停不会操作聊天数据库或消息队列。
+name: koko-chat-monitoring
+services:
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=2GB
+      - --web.external-url=http://127.0.0.1:9090
+    ports: ['127.0.0.1:9090:9090']
+    extra_hosts: ['host.docker.internal:host-gateway']
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./runtime/targets.json:/etc/prometheus/targets.json:ro
+      - ./runtime/koko-ops-token:/etc/prometheus/secrets/koko-ops-token:ro
+      - prometheus-data:/prometheus
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:9090/-/ready']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    logging: &logging
+      driver: json-file
+      options: {max-size: '10m', max-file: '3'}
+  alertmanager:
+    image: prom/alertmanager:v0.34.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --data.retention=120h
+      - --cluster.listen-address=
+      - --web.external-url=http://127.0.0.1:9093
+    ports: ['127.0.0.1:9093:9093']
+    volumes:
+      - ./runtime/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./runtime/smtp-password:/etc/alertmanager/secrets/smtp-password:ro
+      - ./email.tmpl:/etc/alertmanager/email.tmpl:ro
+      - alertmanager-data:/alertmanager
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '--spider', 'http://127.0.0.1:9093/-/ready']
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    logging: *logging
+volumes:
+  prometheus-data:
+  alertmanager-data:

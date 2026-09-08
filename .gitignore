@@ -51,3 +51,6 @@ Desktop.ini
 # Python 运维脚本生成文件
 __pycache__/
 *.pyc
+
+# 常驻监控生成的凭据与接收方配置
+/deploy/monitoring/runtime/

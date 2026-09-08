@@ -1,0 +1,30 @@
+# SMTP 占位符由 scripts/monitoring.py 安全替换；密码只从独立文件读取。
+global:
+  resolve_timeout: 5m
+route:
+  receiver: email
+  group_by: [alertname, environment, instance]
+  group_wait: 30s
+  group_interval: 1m
+  repeat_interval: 4h
+inhibit_rules:
+  # 节点整体不可达时，避免同一节点的旧快照和积压重复报警。
+  - source_matchers: ['alertname="KokoScrapeUnavailable"']
+    target_matchers: ['alertname=~"KokoSnapshotStale|KokoDependencyUnavailable|KokoOutboxBacklog|KokoDeadLettersPending|KokoReplayBacklog|KokoBusinessPressure"']
+    equal: [instance, environment]
+templates: [/etc/alertmanager/email.tmpl]
+receivers:
+  - name: email
+    email_configs:
+      - to: __SMTP_TO__
+        from: __SMTP_FROM__
+        smarthost: __SMTP_SMARTHOST__
+        auth_username: __SMTP_USERNAME__
+        auth_password_file: /etc/alertmanager/secrets/smtp-password
+        require_tls: true
+        tls_config: {min_version: TLS12}
+        send_resolved: true
+        headers:
+          Subject: '{{ template "koko.subject" . }}'
+        text: '{{ template "koko.text" . }}'
+        html: '{{ template "koko.html" . }}'

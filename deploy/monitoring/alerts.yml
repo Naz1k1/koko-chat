@@ -36,3 +36,18 @@ groups:
         for: 30s
         labels: {severity: warning}
         annotations: {summary: 'koko-chat 业务处理积压'}
+      - alert: KokoAlertmanagerUnavailable
+        expr: up{job="alertmanager"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: 'Alertmanager 不可用，邮件通知可能中断'}
+      - alert: KokoEmailDeliveryFailed
+        expr: increase(alertmanager_notifications_failed_total{integration="email"}[5m]) > 0
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: '邮件投递失败，请检查 SMTP 配置与 Alertmanager 日志'}
+      - alert: KokoAlertDispatchFailed
+        expr: increase(prometheus_notifications_errors_total[5m]) > 0
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: 'Prometheus 向 Alertmanager 投递告警失败'}
