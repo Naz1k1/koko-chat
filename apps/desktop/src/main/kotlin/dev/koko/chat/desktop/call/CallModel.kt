@@ -70,7 +70,11 @@ class CallModel(parent:CoroutineScope,private val sessions:SessionManager,privat
             } finally { mutable.update { it.copy(busy=false) };wake.trySend(Unit) }
         } }
     }
-    fun accept(camera:Boolean=true) { acceptWithCamera=camera;act("ACCEPT") }
+    fun accept(camera:Boolean=true) {
+        // 接听提交期间忽略重复点击，不能把已选的“仅语音”改成开启摄像头。
+        if(online==null || currentId==null || state.value.busy) return
+        acceptWithCamera=camera;act("ACCEPT")
+    }
     fun hangup()=act("END")
     private fun act(action:String) {
         if(online==null || currentId==null || state.value.busy) return
