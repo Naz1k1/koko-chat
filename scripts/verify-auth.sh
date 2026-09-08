@@ -5,6 +5,8 @@ cd "$(dirname "$0")/.."
 set -a
 source deploy/.env
 set +a
+# 测试进程不自动归档业务死信；运维专用用例使用独立测试凭据覆盖。
+export KOKO_OPS_TOKEN=""
 export KOKO_CHAT_AUTH_TEST=true
 cd server
 ./mvnw -B -ntp verify "$@"

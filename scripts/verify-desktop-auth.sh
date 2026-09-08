@@ -5,6 +5,8 @@ cd "$(dirname "$0")/.."
 set -a
 source deploy/.env
 set +a
+# 测试进程不自动归档业务死信；运维专用用例使用独立测试凭据覆盖。
+export KOKO_OPS_TOKEN=""
 export KOKO_CHAT_TEST_ACCOUNT_PREFIX="dsk_$(python3 -c 'import uuid; print(uuid.uuid4().hex[:20])')"
 export HTTP_PORT="${KOKO_CHAT_VERIFY_HTTP_PORT:-18080}"
 export IM_PORT="${KOKO_CHAT_VERIFY_IM_PORT:-18081}"
