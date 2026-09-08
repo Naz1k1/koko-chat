@@ -1,0 +1,13 @@
+# 独立运行 Prometheus 时使用；每个后端节点都需添加一个抓取目标。
+global:
+  scrape_interval: 15s
+rule_files:
+  - alerts.yml
+scrape_configs:
+  - job_name: koko-chat
+    metrics_path: /internal/ops/metrics
+    authorization:
+      type: Bearer
+      credentials_file: /etc/prometheus/secrets/koko-ops-token
+    static_configs:
+      - targets: ['127.0.0.1:8080']

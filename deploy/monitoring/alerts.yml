@@ -1,0 +1,38 @@
+groups:
+  - name: koko-chat
+    rules:
+      - alert: KokoScrapeUnavailable
+        expr: up{job="koko-chat"} == 0
+        for: 1m
+        labels: {severity: critical}
+        annotations: {summary: 'koko-chat 指标入口不可达或认证失败'}
+      - alert: KokoSnapshotStale
+        expr: koko_snapshot_age_seconds > 90
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: 'koko-chat 监控快照停止更新'}
+      - alert: KokoDependencyUnavailable
+        expr: koko_mysql_up == 0 or koko_redis_up == 0 or koko_rabbitmq_up == 0 or koko_rustfs_up == 0
+        for: 30s
+        labels: {severity: critical}
+        annotations: {summary: 'koko-chat 核心依赖不可用'}
+      - alert: KokoOutboxBacklog
+        expr: koko_outbox_oldest_seconds >= 60 or koko_outbox_pending >= 100
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: 'koko-chat 消息发布积压'}
+      - alert: KokoDeadLettersPending
+        expr: koko_dead_unreviewed > 0 or koko_queue_dispatch_dlq_ready > 0
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: 'koko-chat 有未处理死信'}
+      - alert: KokoReplayBacklog
+        expr: koko_replay_oldest_seconds >= 60
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: 'koko-chat 人工重放尚未发布成功'}
+      - alert: KokoBusinessPressure
+        expr: koko_business_queued >= 200 or koko_queue_dispatch_q_ready >= 1000
+        for: 30s
+        labels: {severity: warning}
+        annotations: {summary: 'koko-chat 业务处理积压'}

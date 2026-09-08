@@ -47,3 +47,7 @@ Desktop.ini
 
 # --- Logs ---
 *.log
+
+# Python 运维脚本生成文件
+__pycache__/
+*.pyc

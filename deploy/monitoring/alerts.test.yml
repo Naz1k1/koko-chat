@@ -1,0 +1,16 @@
+rule_files: [alerts.yml]
+evaluation_interval: 15s
+tests:
+  - interval: 15s
+    input_series:
+      - series: 'koko_outbox_oldest_seconds{instance="node-a"}'
+        values: '0 0 70x8 0x10'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: KokoOutboxBacklog
+        exp_alerts:
+          - exp_labels: {instance: node-a, severity: warning}
+            exp_annotations: {summary: 'koko-chat 消息发布积压'}
+      - eval_time: 4m
+        alertname: KokoOutboxBacklog
+        exp_alerts: []
