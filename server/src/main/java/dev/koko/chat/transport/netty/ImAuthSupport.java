@@ -31,6 +31,8 @@ public class ImAuthSupport {
     public ImAuthSupport(ImTicketService tickets, AuthService auth, @Qualifier("imBusinessExecutor") TaskExecutor executor, ChatService chat, OnlineRoutes routes, dev.koko.chat.call.CallService calls) {
         this.tickets=tickets;this.auth=auth;this.executor=executor;this.chat=chat;this.routes=routes;this.calls=calls;
     }
+    /** 当前进程持有的认证连接数；不是全局在线用户数。 */
+    public int connectionCount() { return (int)channels.values().stream().filter(Channel::isActive).count(); }
     public void execute(Runnable task) { executor.execute(task); }
     public Identity authenticate(String ticket) { return tickets.consume(ticket); }
     public boolean active(Identity identity) { return auth.active(identity); }

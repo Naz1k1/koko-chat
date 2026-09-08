@@ -43,5 +43,10 @@ public class RustFsStorage implements AutoCloseable {
     }
     public ResponseInputStream<GetObjectResponse> get(String key) { ensureBucket();return client.getObject(b -> b.bucket(bucket).key(key)); }
     public void delete(String key) { client.deleteObject(b -> b.bucket(bucket).key(key)); }
+    /** 只检查服务可达和桶访问；尚未创建桶的 404 不视为存储宕机，不创建测试对象。 */
+    public boolean healthy() {
+        try { client.headBucket(b -> b.bucket(bucket).overrideConfiguration(c -> c.apiCallTimeout(Duration.ofSeconds(3)).apiCallAttemptTimeout(Duration.ofSeconds(2))));return true; }
+        catch(S3Exception unavailable) { return unavailable.statusCode()==404; }
+    }
     @Override public void close() { client.close(); }
 }

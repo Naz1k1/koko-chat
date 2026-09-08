@@ -34,13 +34,13 @@ class MySqlSchemaTest {
                 Flyway flyway = Flyway.configure().dataSource(url, user, password)
                         .schemas(schema).defaultSchema(schema).createSchemas(false)
                         .initSql("SET time_zone = '+00:00'").load();
-                assertThat(flyway.migrate().migrationsExecuted).isEqualTo(6);
+                assertThat(flyway.migrate().migrationsExecuted).isEqualTo(7);
                 flyway.validate();
                 assertThat(flyway.migrate().migrationsExecuted).isZero();
                 connection.setCatalog(schema);
                 execute(connection, "SET time_zone = '+00:00'");
                 assertThat(count(connection, "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name <> 'flyway_schema_history'"))
-                        .isEqualTo(13);
+                        .isEqualTo(15);
 
                 // 测试账号只存在于临时库，哈希字段使用不可登录的占位数据。
                 execute(connection, "INSERT INTO app_user(id, account, password_hash, nickname) VALUES (1, 'alice', 'test-only-hash', '小甲'), (2, 'bob', 'test-only-hash', '小乙')");
