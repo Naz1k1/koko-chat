@@ -14,7 +14,7 @@ import java.time.*;
 import java.util.*;
 import static dev.koko.chat.call.CallModels.*;
 
-/** 通话命令经认证 Netty 执行；状态机与信令邮箱同事务，音频字节由 WebRTC 传输。 */
+/** 通话命令经认证 Netty 执行；状态机与信令邮箱同事务，音视频字节由 WebRTC 传输。 */
 @Service @Profile("local")
 public class CallService {
     private final CallMapper mapper;private final ChatMapper chats;private final AuthService auth;private final ApplicationEventPublisher events;private final TransactionTemplate tx;
@@ -46,10 +46,14 @@ public class CallService {
             } else if("CONNECTED".equals(action)) {
                 if(!device(identity,row) || "RINGING".equals(row.state())) denied();
                 mapper.connected(callId,identity.sessionId());mapper.heartbeat(callId,identity.sessionId());changed(row);
+            } else if("MEDIA".equals(action)) {
+                if(!device(identity,row) || "RINGING".equals(row.state()) || !"VIDEO".equals(row.mediaType())) denied();
+                var enabled=body.get("cameraEnabled");if(enabled==null || !enabled.isBoolean()) invalid();
+                mapper.camera(callId,identity.sessionId(),enabled.booleanValue());changed(row);
             } else if("SIGNAL".equals(action)) {
                 if(!device(identity,row) || "RINGING".equals(row.state())) denied();
                 String signal=field(body,"signalId"),kind=field(body,"kind"),payload=field(body,"payload");validId(signal);
-                if(!Set.of("OFFER","ANSWER","ICE").contains(Objects.toString(kind,"")) || payload==null || payload.isBlank() || payload.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>6144) invalid();
+                if(!Set.of("OFFER","ANSWER","ICE").contains(Objects.toString(kind,"")) || payload==null || payload.isBlank() || payload.getBytes(java.nio.charset.StandardCharsets.UTF_8).length>12288) invalid();
                 if(("OFFER".equals(kind) && identity.userId()!=row.callerId()) || ("ANSWER".equals(kind) && identity.userId()!=row.calleeId())) denied();
                 var previous=mapper.signal(callId,identity.sessionId(),signal);
                 if(previous!=null) { if(!previous.kind().equals(kind) || !previous.payload().equals(payload)) throw new AuthException(409,"SIGNAL_CONFLICT","同一编号信令内容不一致"); }
@@ -64,6 +68,8 @@ public class CallService {
     }
     private Snapshot create(Identity identity,JsonNode body) {
         String id=field(body,"callId");validId(id);long conversation=ChatService.number(field(body,"conversationId"),false);
+        String mediaType=body.has("mediaType")?field(body,"mediaType"):"AUDIO";
+        if(!Set.of("AUDIO","VIDEO").contains(Objects.toString(mediaType,""))) invalid();
         return tx.execute(status -> {
             var chat=chats.conversation(conversation);var me=chats.member(conversation,identity.userId());
             if(chat==null || !"DIRECT".equals(chat.type()) || !"ACTIVE".equals(chat.status()) || me==null || !"ACTIVE".equals(me.status()) || !me.membershipEpoch().equals(field(body,"membershipEpoch"))) denied();
@@ -71,17 +77,23 @@ public class CallService {
             mapper.lockUser(Math.min(identity.userId(),peer.userId()));mapper.lockUser(Math.max(identity.userId(),peer.userId()));
             var old=mapper.find(id);
             if(old!=null) {
-                if(old.callerId()!=identity.userId() || !old.callerSession().equals(identity.sessionId()) || old.conversationId()!=conversation) throw new AuthException(409,"CALL_CONFLICT","呼叫编号已被使用");
+                if(old.callerId()!=identity.userId() || !old.callerSession().equals(identity.sessionId()) || old.conversationId()!=conversation || !old.mediaType().equals(mediaType)) throw new AuthException(409,"CALL_CONFLICT","呼叫编号已被使用");
                 return snapshot(old,identity,0);
             }
             if(mapper.recentCalls(identity.userId())>=10) throw new AuthException(429,"CALL_RATE_LIMIT","呼叫过于频繁，请稍后再试");
             if(mapper.current(identity.userId())!=null || mapper.current(peer.userId())!=null) throw new AuthException(409,"CALL_BUSY","自己或对方正在通话");
-            var row=new Row(id,conversation,identity.userId(),peer.userId(),identity.sessionId(),null,"RINGING",null,LocalDateTime.now(ZoneOffset.UTC).plusSeconds(45));
+            var row=new Row(id,conversation,identity.userId(),peer.userId(),identity.sessionId(),null,"RINGING",null,LocalDateTime.now(ZoneOffset.UTC).plusSeconds(45),mediaType,false,false);
             mapper.create(row);changed(row);return snapshot(mapper.find(id),identity,0);
         });
     }
     private Snapshot snapshot(Row row,Identity identity,long after) {
-        return new Snapshot(view(row),"ENDED".equals(row.state()) || !device(identity,row)?List.of():mapper.signals(row.id(),identity.sessionId(),after));
+        // 一个快照最多携带 12 KiB 原始信令，避免音视频 SDP 堆积撑爆客户端帧限制。
+        List<Signal> signals=new ArrayList<>();int bytes=0;
+        if(!"ENDED".equals(row.state()) && device(identity,row)) for(var signal:mapper.signals(row.id(),identity.sessionId(),after)) {
+            int size=signal.payload().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+            if(bytes+size>12288) break;signals.add(signal);bytes+=size;
+        }
+        return new Snapshot(view(row),signals);
     }
     private boolean device(Identity identity,Row row) {
         return identity.userId()==row.callerId()?identity.sessionId().equals(row.callerSession()):row.calleeSession()==null || identity.sessionId().equals(row.calleeSession());

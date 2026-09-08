@@ -17,8 +17,8 @@ public record NettyProperties(
         @DefaultValue("127.0.0.1") @NotBlank String host,
         @DefaultValue("8081") @Min(0) @Max(65535) int port,
         @DefaultValue("/im") @Pattern(regexp = "/[a-zA-Z0-9/_-]+") String path,
-        @DefaultValue("16384") @Min(256) @Max(1048576) int maxFrameBytes,
-        @DefaultValue("16384") @Min(256) @Max(1048576) int maxMessageBytes,
+        @DefaultValue("32768") @Min(256) @Max(1048576) int maxFrameBytes,
+        @DefaultValue("32768") @Min(256) @Max(1048576) int maxMessageBytes,
         @DefaultValue("75s") Duration idleTimeout,
         @DefaultValue("30s") Duration authenticationTimeout) {
     // 在绑定配置时拒绝无效超时，避免连接无期限占用资源。

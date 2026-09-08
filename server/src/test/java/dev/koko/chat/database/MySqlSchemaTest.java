@@ -34,7 +34,7 @@ class MySqlSchemaTest {
                 Flyway flyway = Flyway.configure().dataSource(url, user, password)
                         .schemas(schema).defaultSchema(schema).createSchemas(false)
                         .initSql("SET time_zone = '+00:00'").load();
-                assertThat(flyway.migrate().migrationsExecuted).isEqualTo(7);
+                assertThat(flyway.migrate().migrationsExecuted).isEqualTo(8);
                 flyway.validate();
                 assertThat(flyway.migrate().migrationsExecuted).isZero();
                 connection.setCatalog(schema);

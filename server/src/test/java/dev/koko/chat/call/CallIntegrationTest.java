@@ -54,6 +54,35 @@ class CallIntegrationTest {
         jdbc.update("UPDATE call_session SET expires_at=DATE_SUB(UTC_TIMESTAMP(3),INTERVAL 1 SECOND) WHERE id=?",next);calls.expireCalls();
         assertThat(mapper.find(next).reason()).isEqualTo("TIMEOUT");assertThat(calls.command(b.identity(),command("ACCEPT",next)).call().state()).isEqualTo("ENDED");
     }
+    @Test void videoTypeAndCameraStateAreBoundToCallAndDevice() {
+        var a=person();var b=person();var other=login(b.account());
+        var conversation=chat.createDirect(a.identity(),b.account());conversations.add(conversation.id());
+        String id=UUID.randomUUID().toString();
+        var create=command("CREATE",id).put("conversationId",conversation.id()).put("membershipEpoch",conversation.membershipEpoch());
+        assertThatThrownBy(()->calls.command(a.identity(),create.deepCopy().put("mediaType","SCREEN"))).isInstanceOf(AuthException.class);
+        create.put("mediaType","VIDEO");
+        assertThat(calls.command(a.identity(),create).call().mediaType()).isEqualTo("VIDEO");
+        assertThatThrownBy(()->calls.command(a.identity(),create.deepCopy().put("mediaType","AUDIO"))).isInstanceOf(AuthException.class).extracting("code").isEqualTo("CALL_CONFLICT");
+        var camera=command("MEDIA",id).put("cameraEnabled",true);
+        assertThatThrownBy(()->calls.command(a.identity(),camera)).isInstanceOf(AuthException.class);
+        calls.command(b.identity(),command("ACCEPT",id));
+        assertThatThrownBy(()->calls.command(other.identity(),camera)).isInstanceOf(AuthException.class);
+        assertThatThrownBy(()->calls.command(a.identity(),camera.deepCopy().put("cameraEnabled","true"))).isInstanceOf(AuthException.class);
+        calls.command(a.identity(),camera);calls.command(a.identity(),camera);
+        var view=calls.command(b.identity(),command("SYNC",id)).call();
+        assertThat(view.callerCamera()).isTrue();assertThat(view.calleeCamera()).isFalse();
+        calls.command(a.identity(),camera.deepCopy().put("cameraEnabled",false));
+        assertThat(mapper.find(id).callerCamera()).isFalse();
+        // 音视频 SDP 扩容，但快照按字节分页，超过限制的信令仍被拒绝。
+        for(String kind:List.of("OFFER","ICE")) calls.command(a.identity(),command("SIGNAL",id).put("signalId",UUID.randomUUID().toString()).put("kind",kind).put("payload","x".repeat(7000)));
+        var first=calls.command(b.identity(),command("SYNC",id)).signals();assertThat(first).hasSize(1);
+        assertThat(calls.command(b.identity(),command("SYNC",id).put("after",first.getFirst().id())).signals()).hasSize(1);
+        assertThatThrownBy(()->calls.command(a.identity(),command("SIGNAL",id).put("signalId",UUID.randomUUID().toString()).put("kind","ICE").put("payload","x".repeat(12289)))).isInstanceOf(AuthException.class);
+        calls.command(b.identity(),camera);calls.command(a.identity(),command("END",id));
+        assertThat(mapper.find(id).calleeCamera()).isFalse();assertThat(mapper.signalCount(id)).isZero();
+        create.remove("mediaType");create.put("callId",UUID.randomUUID().toString());
+        assertThat(calls.command(a.identity(),create).call().mediaType()).isEqualTo("AUDIO");
+    }
     @AfterEach void cleanup() {
         for(String conversation:conversations) {
             jdbc.update("DELETE FROM call_signal WHERE call_id IN (SELECT id FROM call_session WHERE conversation_id=?)",conversation);

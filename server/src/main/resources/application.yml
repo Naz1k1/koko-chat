@@ -29,7 +29,7 @@ koko:
     host: ${IM_HOST:127.0.0.1}
     port: ${IM_PORT:8081}
     path: /im
-    max-frame-bytes: 16384
-    max-message-bytes: 16384
+    max-frame-bytes: 32768
+    max-message-bytes: 32768
     idle-timeout: 75s
     authentication-timeout: 30s

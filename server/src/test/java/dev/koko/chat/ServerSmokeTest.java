@@ -92,8 +92,8 @@ class ServerSmokeTest {
             probe.socket.sendText("{\"v\":1,\"type\":\"PI", false).get(5, TimeUnit.SECONDS);
             probe.socket.sendText("NG\"}", true).get(5, TimeUnit.SECONDS);
             assertThat(mapper.readTree(probe.nextMessage()).path("type").asText()).isEqualTo("PONG");
-            probe.socket.sendText("x".repeat(9000), false).get(5, TimeUnit.SECONDS);
-            probe.socket.sendText("x".repeat(9000), true).get(5, TimeUnit.SECONDS);
+            probe.socket.sendText("x".repeat(17000), false).get(5, TimeUnit.SECONDS);
+            probe.socket.sendText("x".repeat(17000), true).get(5, TimeUnit.SECONDS);
             assertThat(probe.closed.get(5, TimeUnit.SECONDS)).isEqualTo(1009);
         }
     }
@@ -101,7 +101,7 @@ class ServerSmokeTest {
     @Test
     void rejectsAnOversizedFrameAndBinaryMessages() throws Exception {
         try (Probe probe = connect()) {
-            probe.send("x".repeat(17000));
+            probe.send("x".repeat(33000));
             assertThat(probe.closed.get(5, TimeUnit.SECONDS)).isEqualTo(1009);
         }
         try (Probe probe = connect()) {
