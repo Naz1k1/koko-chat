@@ -221,4 +221,6 @@ Compose 的 jpackage/jlink 流程生成包含 Java 运行时的安装包，用�
 
 ## 当前语音实现
 
-CallModel 订阅认证连接与 CALL_CHANGED，串行执行 SYNC / CREATE / ACCEPT / SIGNAL / CONNECTED / END。媒体事件带 callId，迟到回调不污染新通话；确认丢失保留呼叫及信令原编号，挂断先停止本机媒体再确认远端状态。VoiceEngine 封装原生 WebRTC，无浏览器或 JavaFX 依赖。详见 [语音契约](../contracts/voice-calls.md)。
+CallModel 订阅认证连接与 CALL_CHANGED，串行执行 SYNC / CREATE / ACCEPT / SIGNAL / MEDIA / CONNECTED / END。媒体事件带 callId，迟到回调不污染新通话；确认丢失保留呼叫及信令原编号，挂断先停止本机媒体再确认远端状态。VoiceEngine 封装原生 WebRTC，无浏览器或 JavaFX 依赖。详见 [音视频契约](../contracts/voice-calls.md)。
+
+视频按钮、来电选择、本机预览、远端画面与摄像头开关/切换已接入；VideoCaptureSession 管理设备与生命周期，PictureSink 复制并限制像素，独立 StateFlow 避免高帧率更新触发整页聊天刷新。详见 [视频验收](video-verification.md)。

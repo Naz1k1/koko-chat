@@ -335,6 +335,6 @@ Spring Boot 3.5.x 支持 Java 21，可作为这一设计的 3.x 基线；实施�
 
 ## 已落地补充：一对一语音
 
-桌面保留 Kotlin/Compose，增加原生 WebRTC。Netty CALL 负责状态与协商信令，MySQL 保存状态及有界信令邮箱，RabbitMQ 按在线路由发变化提示；客户端每 2 秒同步补齐。音频在两端之间传输，直连不可用时由 coturn 转发。RustFS 负责附件和缩略图。首期图仍为历史基线，未画入本轮语音组件。
+桌面保留 Kotlin/Compose，增加原生 WebRTC。Netty CALL 负责状态与协商信令，MySQL 保存状态及有界信令邮箱，RabbitMQ 按在线路由发变化提示；客户端每 2 秒同步补齐。音视频在两端之间传输，直连不可用时由 coturn 转发。RustFS 负责附件和缩略图。首期图仍为历史基线，未画入本轮语音组件。
 
-后端不引入 DDD 或新微服务。CallService 用用户行锁解决跨会话占线竞争，用通话行锁决定多设备接听归属，终态不重新激活。客户端媒体与认证连接生命周期绑定。当前完成语音单聊，视频仅做过设备枚举，没有摄像头画面或视频按钮。详见 [协议](../contracts/voice-calls.md) 和 [验收](voice-verification.md)。
+后端不引入 DDD 或新微服务。CallService 用用户行锁解决跨会话占线竞争，用通话行锁决定多设备接听归属，终态不重新激活。客户端媒体与认证连接生命周期绑定。已扩展一对一视频：摄像头采集通过 CustomVideoSource 进入既有 WebRTC，UI 只保留每个方向最新一帧；数据库增加媒体类型与摄像头状态，实时画面仍不经过 MQ 或对象存储。详见 [协议](../contracts/voice-calls.md) 和 [验收](voice-verification.md)。

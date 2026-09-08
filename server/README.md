@@ -23,7 +23,7 @@ Java 21、Spring Boot 3.5.16、Netty、MyBatis starter 3.0.5。按功能分包�
 
 默认骨架模式的 `AUTH` 返回 `NOT_IMPLEMENTED`。`local` 模式使用一次性 Redis 票据，成功返回 `AUTH_OK`；未认证的消息命令返回 `UNAUTHENTICATED`，认证后支持 `SEND` / `SEND_ACK`、`MESSAGE` 和 `RECEIVED_ACK`，以及 `READ` / `READ_ACK` / `READ_UPDATE`。单聊接口见 [聊天契约](../contracts/chat.md)。错误响应字段为 `v/type/requestId?/serverTime/code/message`。
 
-单帧和完整聚合消息均限制为 16 KiB；只接收 JSON 文本。握手后未认证连接在 30 秒关闭，PING 不延长认证期限；读空闲 75 秒关闭。Netty EventLoop 仅做轻量协议解析；票据验证和会话有效性查询通过有界 `imBusinessExecutor` 执行，过载关闭 1013，防止阻塞 Netty 事件循环。
+单帧和完整聚合消息均限制为 32 KiB；只接收 JSON 文本。握手后未认证连接在 30 秒关闭，PING 不延长认证期限；读空闲 75 秒关闭。Netty EventLoop 仅做轻量协议解析；票据验证和会话有效性查询通过有界 `imBusinessExecutor` 执行，过载关闭 1013，防止阻塞 Netty 事件循环。
 
 ## local profile 与中间件
 
@@ -69,12 +69,14 @@ MySQL、Redis、RabbitMQ 的开发实例已通过真实健康检查；健康检�
 
 ## 语音、缩略图与附件回收
 
-新增 call 包，使用普通 Controller / Service / Mapper 分层。认证 Netty CALL 命令维护一对一呼叫状态、设备占用和幂等信令邮箱；RabbitMQ 推送 CALL_CHANGED 提示，客户端每 2 秒补拉状态。音频由 WebRTC 直连或 coturn 中继，不经过 Netty/MQ/RustFS。认证 HTTP `/api/calls/config` 只下发限时 TURN 凭证。local 系统阶段更新为 voice-calls。
+新增 call 包，使用普通 Controller / Service / Mapper 分层。认证 Netty CALL 命令维护一对一呼叫状态、设备占用和幂等信令邮箱；RabbitMQ 推送 CALL_CHANGED 提示，客户端每 2 秒补拉状态。音视频由 WebRTC 直连或 coturn 中继，不经过 Netty/MQ/RustFS。认证 HTTP `/api/calls/config` 只下发限时 TURN 凭证。local 系统阶段更新为 voice-calls。
 
-V5 增加附件回收，V6 增加通话与信令表。上传图片生成私有 JPEG 缩略图，旧图首次访问补生成。清理每 60 秒运行，先在会话锁内转 EXPIRED，再删除原图与缩略图；失败重试，ATTACHED 不参与。见 [附件协议](../contracts/attachments.md) 和 [语音协议](../contracts/voice-calls.md)。
+V5 增加附件回收，V6 增加通话与信令表。上传图片生成私有 JPEG 缩略图，旧图首次访问补生成。清理每 60 秒运行，先在会话锁内转 EXPIRED，再删除原图与缩略图；失败重试，ATTACHED 不参与。见 [附件协议](../contracts/attachments.md) 和 [音视频协议](../contracts/voice-calls.md)。
 
 ## 后台监控与死信处理
 
 ops 包提供独立 token 保护的 `/internal/ops/*`。定时快照覆盖依赖、队列、Outbox、连接和业务线程池；导出 Prometheus 文本指标，并记录告警触发/恢复。后台先归档死信再 ACK，人工重放写审计与发布租约，保留原消息编号并重新验证当前路由/权限。运维调度使用独立线程池。
 
 V7 新增 ops_dead_letter / ops_action。使用 `scripts/ops.py` 查询和处理，详见 [运维手册](../docs/operations.md) 与 [验证记录](../docs/operations-verification.md)。本次测试包括两个独立后端 JVM 的跨节点推送、强制终止网关后补拉及过期发布租约恢复；未做 broker 集群故障与容量压测。
+
+V8 增加 AUDIO/VIDEO 类型与双方摄像头状态；MEDIA 只允许绑定设备更新自身，SDP/ICE 单条及快照累计原始 payload 均限制 12 KiB。见 [音视频协议](../contracts/voice-calls.md)。

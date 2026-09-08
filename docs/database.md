@@ -1,8 +1,10 @@
 # 数据库文件与迁移说明
 
-数据库采用 MySQL 8.4、InnoDB、utf8mb4，首个 Flyway 版本建立 9 张业务表。SQL 包含中文说明、索引及约束，旧迁移保持不变。V2 增加认证字段，V3 新增 group_command，V4 新增 attachment，V5 增加附件过期清理字段，V6 新增 call_session / call_signal，V7 新增 ops_dead_letter / ops_action，当前共 15 张业务及运维表。
+数据库采用 MySQL 8.4、InnoDB、utf8mb4，首个 Flyway 版本建立 9 张业务表。SQL 包含中文说明、索引及约束，旧迁移保持不变。V2 增加认证字段，V3 新增 group_command，V4 新增 attachment，V5 增加附件过期清理字段，V6 新增 call_session / call_signal，V7 新增 ops_dead_letter / ops_action，V8 为 call_session 增加媒体类型与双方摄像头开关，当前共 15 张业务及运维表。
 
-当前新增迁移：[V5 附件回收](../server/src/main/resources/db/migration/V5__expire_unsent_attachments.sql)、[V6 语音通话](../server/src/main/resources/db/migration/V6__create_voice_calls.sql)。
+视频迁移：[V8 音视频通话](../server/src/main/resources/db/migration/V8__add_video_calls.sql)。
+
+既有迁移：[V5 附件回收](../server/src/main/resources/db/migration/V5__expire_unsent_attachments.sql)、[V6 语音通话](../server/src/main/resources/db/migration/V6__create_voice_calls.sql)。
 
 ## 文件入口
 
@@ -32,7 +34,7 @@
 | group_command | 成功群操作的请求摘要和群 ID | 用户+client_command_id 唯一；群外键约束 |
 | attachment | 上传元数据、文件摘要、所属会话/成员周期与绑定消息 | UUID 主键；object_key、message_id 唯一；状态/大小 CHECK；用户及会话外键 |
 | message_outbox | 与消息同事务提交的待发布事件 | 消息+事件类型唯一；待发布、过期租约、已发布清理索引 |
-| call_session | 呼叫、设备归属、连接确认及双方租约 | UUID 主键；参与者/状态与到期索引；用户及会话外键 |
+| call_session | 呼叫类型、双方摄像头状态、设备归属、连接确认及双方租约 | UUID 主键；参与者/状态与到期索引；用户及会话外键 |
 | call_signal | 有限信令邮箱，通话结束删除 | 自增 ID；call_id+sender_session+signal_id 唯一；按通话补拉 |
 
 好友申请的唯一键只约束 PENDING 记录。申请被接受、拒绝或取消后，生成列变为 NULL，允许未来再次申请；相反方向的新申请也不能绕过待处理限制。群聊共享 message 正文，不建立独立群消息表或离线消息正文表。
