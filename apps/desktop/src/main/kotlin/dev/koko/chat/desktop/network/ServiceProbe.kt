@@ -53,7 +53,7 @@ private fun HttpClientConfig<*>.configureClient() {
         connectTimeoutMillis = 3_000
         socketTimeoutMillis = 5_000
     }
-    install(WebSockets) { maxFrameSize = 16 * 1024 }
+    install(WebSockets) { maxFrameSize = 128 * 1024 }
 }
 
 /** 依次检查服务身份与健康，整个过程不会创建认证 WebSocket。 */

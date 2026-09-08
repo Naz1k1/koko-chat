@@ -100,6 +100,7 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
             Row(verticalAlignment=Alignment.CenterVertically) {
                 Text(selected?.nickname ?: "开始一段对话",fontSize=23.sp,fontWeight=FontWeight.SemiBold,color=Color(0xFF213D38),modifier=Modifier.weight(1f))
                 if(selected?.type=="DIRECT") TextButton(model::dialVoice,enabled=!closing && call.call==null && !call.busy && session.phase==dev.koko.chat.desktop.session.SessionState.ONLINE) { Text("语音通话") }
+                if(selected?.type=="DIRECT") TextButton(model::dialVideo,enabled=!closing && call.call==null && !call.busy && session.phase==dev.koko.chat.desktop.session.SessionState.ONLINE) { Text("视频通话") }
                 if(selected?.type=="GROUP") TextButton(model::openGroupManagement,enabled=!closing) { Text("群成员") }
             }
             Text(if(call.call==null && call.notice.isNotBlank()) call.notice else state.notice,fontSize=11.sp,color=Color(0xFF77817D))
@@ -160,7 +161,10 @@ internal fun ChatWorkspace(session:SessionUiState,state:ChatUiState,closing:Bool
     }
     call.call?.let { active ->
         val incoming=active.state=="RINGING" && active.callerSession!=session.sessionId
-        AlertDialog(onDismissRequest={},title={Text(if(incoming) "语音来电" else "语音通话")},
+        if(active.mediaType=="VIDEO") {
+            val video by model.videoState.collectAsState()
+            VideoCallDialog(call,video,session.sessionId==active.callerSession,state.conversations.find { it.id==active.conversationId }?.nickname ?: "联系人",model)
+        } else AlertDialog(onDismissRequest={},title={Text(if(incoming) "语音来电" else "语音通话")},
             text={Column(verticalArrangement=Arrangement.spacedBy(12.dp)) {
                 Text(state.conversations.find { it.id==active.conversationId }?.nickname ?: "联系人")
                 Text(call.notice)

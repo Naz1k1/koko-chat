@@ -2,6 +2,9 @@ package dev.koko.chat.desktop.call
 
 import dev.onvoid.webrtc.*
 import dev.onvoid.webrtc.media.audio.*
+import dev.onvoid.webrtc.media.video.*
+import kotlinx.coroutines.flow.*
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlinx.coroutines.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -16,9 +19,13 @@ data class MediaEvent(val kind:String,val payload:String="")
 class VoiceEngine(private val callback:(MediaEvent)->Unit,private val headless:Boolean=false) {
     private var module:AudioDeviceModuleBase?=null;private var factory:PeerConnectionFactory?=null
     private var source:AudioTrackSource?=null;private var track:AudioTrack?=null;private var peer:RTCPeerConnection?=null
+    private val mediaScope=CoroutineScope(SupervisorJob()+Dispatchers.IO)
+    private val mutableVideo=MutableStateFlow(VideoUiState());val video=mutableVideo.asStateFlow()
+    private var capture:VideoCaptureSession?=null;private var videoTrack:VideoTrack?=null
+    private val remoteTracks=CopyOnWriteArrayList<VideoTrack>()
     private var remoteReady=false;private val waiting=mutableListOf<RTCIceCandidate>();private val closed=AtomicBoolean(false)
     private fun event(kind:String,payload:String="") { if(!closed.get()) callback(MediaEvent(kind,payload)) }
-    suspend fun start(config:CallConfig,relayOnly:Boolean=false) = withContext(Dispatchers.IO) {
+    suspend fun start(config:CallConfig,relayOnly:Boolean=false,videoEnabled:Boolean=false,cameraEnabled:Boolean=true) = withContext(Dispatchers.IO) {
         try {
             val audio=if(headless) HeadlessAudioDeviceModule() else AudioDeviceModule();module=audio
             if(headless) audio.setAudioSource { bytes, samples, _, _, _ -> bytes.fill(0);samples }
@@ -34,11 +41,21 @@ class VoiceEngine(private val callback:(MediaEvent)->Unit,private val headless:B
                 override fun onTrack(transceiver:RTCRtpTransceiver) {
                     // 真实 RTP 音频帧计数仅供自动验收，不存储或输出声音内容。
                     if(headless) (transceiver.receiver.track as? AudioTrack)?.addSink { _,_,_,_,_ -> event("AUDIO_FRAME") }
+                    if(!closed.get()) (transceiver.receiver.track as? VideoTrack)?.let { remote ->
+                        capture?.let { remote.addSink(it.remoteSink);remoteTracks+=remote }
+                    }
                 }
             })
+            if(videoEnabled) {
+                val videoSource=VideoCaptureSession(headless,{ enabled -> event("CAMERA",enabled.toString()) },{ event("CAMERA_STALLED") });capture=videoSource
+                mediaScope.launch { videoSource.state.collect { mutableVideo.value=it } }
+                videoTrack=f.createVideoTrack("video",videoSource.source)
+                peer!!.addTrack(videoTrack,listOf("koko-video"))
+                videoSource.camera(cameraEnabled)
+            }
             source=f.createAudioSource(AudioOptions().apply { echoCancellation=true;noiseSuppression=true;autoGainControl=true })
             track=f.createAudioTrack("voice",source);peer!!.addTrack(track,listOf("koko-voice"))
-        } catch(error:Throwable) { close();throw IllegalStateException("无法初始化语音设备或原生库",error) }
+        } catch(error:Throwable) { close();throw IllegalStateException("无法初始化通话设备或原生库",error) }
     }
     suspend fun offer() { val description=create(true);set(description,true);event("OFFER",description.sdp) }
     suspend fun receive(kind:String,payload:String) {
@@ -56,7 +73,7 @@ class VoiceEngine(private val callback:(MediaEvent)->Unit,private val headless:B
         val result=CompletableDeferred<RTCSessionDescription>()
         val observer=object:CreateSessionDescriptionObserver {
             override fun onSuccess(description:RTCSessionDescription) { result.complete(description) }
-            override fun onFailure(error:String) { result.completeExceptionally(IllegalStateException("音频协商失败")) }
+            override fun onFailure(error:String) { result.completeExceptionally(IllegalStateException("音视频协商失败")) }
         }
         if(offer) peer!!.createOffer(RTCOfferOptions(),observer) else peer!!.createAnswer(RTCAnswerOptions(),observer)
         withTimeout(10_000) { result.await() }
@@ -65,16 +82,23 @@ class VoiceEngine(private val callback:(MediaEvent)->Unit,private val headless:B
         val result=CompletableDeferred<Unit>()
         val observer=object:SetSessionDescriptionObserver {
             override fun onSuccess() { result.complete(Unit) }
-            override fun onFailure(error:String) { result.completeExceptionally(IllegalStateException("音频协商描述不可用")) }
+            override fun onFailure(error:String) { result.completeExceptionally(IllegalStateException("音视频协商描述不可用")) }
         }
         if(local) peer!!.setLocalDescription(description,observer) else peer!!.setRemoteDescription(description,observer)
         withTimeout(10_000) { result.await() }
     }
+    suspend fun camera(enabled:Boolean,id:String?=null) = withContext(Dispatchers.IO) {
+        videoTrack?.setEnabled(enabled);capture?.camera(enabled,id);Unit
+    }
     suspend fun mute(value:Boolean) = withContext(Dispatchers.IO) { track?.setEnabled(!value);Unit }
     suspend fun close() = withContext(NonCancellable+Dispatchers.IO) {
-        closed.set(true)
+        if(closed.getAndSet(true)) return@withContext
+        capture?.stopCapture()
+        capture?.let { media -> remoteTracks.forEach { it.removeSink(media.remoteSink) } };remoteTracks.clear()
         peer?.senders?.forEach { it.replaceTrack(null) }
         peer?.close();peer=null
+        videoTrack?.dispose();videoTrack=null
+        capture?.close();capture=null;mediaScope.cancel();mutableVideo.value=VideoUiState()
         track?.dispose();track=null;source=null;factory?.dispose();factory=null;module?.dispose();module=null
     }
 }

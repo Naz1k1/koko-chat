@@ -60,6 +60,10 @@ class DesktopScreenModel(
     val sessionState: StateFlow<SessionUiState> = sessions?.state ?: MutableStateFlow(SessionUiState())
     val callState = calls?.state ?: MutableStateFlow(dev.koko.chat.desktop.call.CallUiState())
     fun dialVoice() { chat?.state?.value?.let { state -> state.conversations.find { it.id==state.selectedId }?.let { calls?.dial(it) } } }
+    val videoState = calls?.video ?: MutableStateFlow(dev.koko.chat.desktop.call.VideoUiState())
+    fun dialVideo() { chat?.state?.value?.let { state -> state.conversations.find { it.id==state.selectedId }?.let { calls?.dial(it,true) } } }
+    fun acceptVideo(camera:Boolean) { calls?.accept(camera) }
+    fun camera(enabled:Boolean,id:String?=null) { calls?.camera(enabled,id) }
     fun acceptVoice() { calls?.accept() }
     fun hangupVoice() { calls?.hangup() }
     fun muteVoice() { calls?.mute() }

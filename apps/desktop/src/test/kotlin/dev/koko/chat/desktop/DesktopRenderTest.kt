@@ -167,17 +167,23 @@ class DesktopRenderTest {
                 model.state.first { it.initialized }
                 val info=ConversationInfo("10","2","xiaoyu","小雨","epoch","1","0")
                 val session=SessionUiState(SessionState.ONLINE,UserProfile("1","yako","Yako"),"IM 在线","preview-session")
-                for(active in listOf(false,true)) {
+                for(videoMode in listOf(false,true)) for(active in listOf(false,true)) {
                     (model.callState as kotlinx.coroutines.flow.MutableStateFlow).value=dev.koko.chat.desktop.call.CallUiState(
-                        dev.koko.chat.desktop.call.VoiceCall("voice","10","2","1","other","preview-session",if(active) "ACTIVE" else "RINGING",null,"2026-09-08T00:00:00Z"),
-                        connected=active,notice=if(active) "语音通话中" else "收到语音来电")
+                        dev.koko.chat.desktop.call.VoiceCall("voice","10","2","1","other","preview-session",if(active) "ACTIVE" else "RINGING",null,"2026-09-08T00:00:00Z",if(videoMode) "VIDEO" else "AUDIO",callerCamera=active,calleeCamera=active),
+                        connected=active,notice=if(videoMode) { if(active) "视频通话中" else "收到视频来电" } else { if(active) "语音通话中" else "收到语音来电" })
+                    if(videoMode && active) {
+                        val pixels=ByteArray(320*240*4) { index -> when(index%4) {0->40;1->(70+index/1280%100).toByte();2->160.toByte();else->255.toByte()} }
+                        val picture=dev.koko.chat.desktop.call.VideoPicture(320,240,pixels)
+                        (model.videoState as kotlinx.coroutines.flow.MutableStateFlow).value=dev.koko.chat.desktop.call.VideoUiState(picture,picture,true,
+                            listOf(dev.koko.chat.desktop.call.CameraChoice("demo","演示摄像头"),dev.koko.chat.desktop.call.CameraChoice("other","备用摄像头")),"demo")
+                    }
                     val scene=ImageComposeScene(width=960,height=640,coroutineContext=coroutineContext)
                     try {
                         scene.setContent { MaterialTheme { ChatWorkspace(session,ChatUiState(listOf(info),"10",notice="消息已同步"),false,model) } }
                         repeat(24) { scene.render(System.nanoTime()).close();delay(16) }
                         val labels=scene.semanticsOwners.asSequence().flatMap { flatten(it.rootSemanticsNode) }.flatMap { it.config.getOrNull(SemanticsProperties.Text).orEmpty().asSequence() }.map { it.text }.toList()
-                        assertTrue(if(active) "静音" in labels && "挂断" in labels else "接听" in labels && "拒绝" in labels)
-                        scene.render(System.nanoTime()).use { image -> image.encodeToData()!!.use { Files.write(directory.resolve("voice-${if(active) "active" else "incoming"}-960.png"),it.bytes) } }
+                        assertTrue(if(active) "静音" in labels && "挂断" in labels else (if(videoMode) "开启摄像头接听" in labels && "仅语音接听" in labels else "接听" in labels) && "拒绝" in labels)
+                        scene.render(System.nanoTime()).use { image -> image.encodeToData()!!.use { Files.write(directory.resolve("${if(videoMode) "video" else "voice"}-${if(active) "active" else "incoming"}-960.png"),it.bytes) } }
                     } finally { scene.close() }
                 }
             } finally { model.close();store.close() }

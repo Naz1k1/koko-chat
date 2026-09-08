@@ -55,6 +55,21 @@ class LiveVoiceClientTest {
                 callA.mute();withTimeout(5000) { callA.state.first { it.muted } }
                 callA.hangup();withTimeout(10_000) { callA.state.first { it.call==null };callB.state.first { it.call==null } }
                 assertFalse(callB.state.value.connected)
+                // 同一好友先完成语音，再发起视频；被叫可先仅语音接听，之后主动开摄像头。
+                callA.dial(info,true)
+                withTimeout(15_000) { callB.state.first { it.call?.state=="RINGING" && it.call?.mediaType=="VIDEO" } }
+                callB.accept(false)
+                withTimeout(25_000) { callA.state.first { it.connected && it.call?.state=="ACTIVE" };callB.state.first { it.connected && it.call?.state=="ACTIVE" } }
+                withTimeout(10_000) { callA.video.first { it.local!=null };callB.video.first { it.remote!=null } }
+                assertFalse(callB.video.value.cameraEnabled)
+                callA.camera(false)
+                withTimeout(10_000) { callB.state.first { it.call?.callerCamera==false } }
+                callA.camera(true);callB.camera(true)
+                withTimeout(10_000) { callA.video.first { it.remote!=null };callB.state.first { it.call?.callerCamera==true && it.call?.calleeCamera==true } }
+                a.logout()
+                withTimeout(10_000) { callA.video.first { it.local==null && it.remote==null };callA.state.first { it.call==null } }
+                callB.hangup();withTimeout(10_000) { callB.state.first { it.call==null } }
+                assertNull(callB.video.value.local)
                 assertEquals(setOf("CREATE","SIGNAL","CONNECTED","END"),dropped)
                 assertTrue(lostAccept)
                 assertTrue(signalIds.groupingBy { it }.eachCount().values.any { it>=2 },"信令确认丢失应复用原编号重发")
