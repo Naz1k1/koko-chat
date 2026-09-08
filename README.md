@@ -66,6 +66,8 @@ cd apps/desktop
 - [后台运维手册](docs/operations.md)
 - [运维接口契约](contracts/operations.md)
 - [监控、死信及多节点验收](docs/operations-verification.md)
+- [常驻监控与邮件通知](docs/monitoring.md)
+- [常驻监控验收记录](docs/monitoring-verification.md)
 - [数据库建表文件、字段与迁移方法](docs/database.md)
 - [架构设计、技术选型与实施顺序](docs/architecture.md)
 - [Kotlin 桌面端：模块、状态、同步与打包](docs/desktop.md)

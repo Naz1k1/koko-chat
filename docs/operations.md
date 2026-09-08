@@ -49,13 +49,17 @@ python3 scripts/ops.py ack 归档ID --reason '确认畸形事件，保留归档�
 
 归档和重放不会删除聊天消息、附件或队列，也不会向全部用户广播。后续再次出现的失败仍会报警。
 
-## Prometheus 接入
+## 常驻监控与邮件
 
-[抓取配置](../deploy/monitoring/prometheus.yml) 和 [告警规则](../deploy/monitoring/alerts.yml) 可交给独立 Prometheus。样例假设 Prometheus 与后端在同一主机网络，目标为 127.0.0.1:8080；容器部署需按实际网络修改目标地址，不能把容器内的 127.0.0.1 当成宿主机。
+已增加独立 Prometheus / Alertmanager 常驻部署、邮件接收方配置与故障/恢复通知。启动、凭据、告警策略、实际投递验证和运行边界见 [常驻监控与邮件手册](monitoring.md)。监控邮箱与后端环境分别使用 deploy/monitoring/.env 和 deploy/.env。
 
-将运维 token 通过受限 secret 文件提供给 Prometheus 的 `/etc/prometheus/secrets/koko-ops-token`，不写进 YAML；为每个后端实例添加 target。指标没有用户 ID、消息 ID 标签。共享 Outbox/死信数据在多个节点重复采集，使用 max 等聚合判断积压，连接数才适合按节点求和。
+```bash
+python3 scripts/monitoring.py up
+python3 scripts/monitoring.py status
+python3 scripts/monitoring.py test-email
+```
 
-本轮只使用临时官方 promtool 容器检查配置、真实指标格式及规则触发/恢复，没有常驻启动 Prometheus，也没有发送外部告警。若需要邮件或聊天通知，后续配置 Alertmanager 接收方。验证工具固定为 prom/prometheus:v3.5.0，仅用于规则校验，不代表已确定生产监控版本。
+邮件未配置时 up 明确报错；显式 --monitor-only 可只启动采集和告警页面。生产 TLS、备份恢复与容量压测不在本轮范围。
 
 ## 验证与故障演练
 

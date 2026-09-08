@@ -14,3 +14,39 @@ tests:
       - eval_time: 4m
         alertname: KokoOutboxBacklog
         exp_alerts: []
+  - interval: 15s
+    input_series:
+      - series: 'up{job="koko-chat",instance="node-a"}'
+        values: '0x8 1x8'
+      - series: 'up{job="alertmanager",instance="alertmanager:9093"}'
+        values: '0x8 1x8'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: KokoScrapeUnavailable
+        exp_alerts:
+          - exp_labels: {job: koko-chat, instance: node-a, severity: critical}
+            exp_annotations: {summary: 'koko-chat 指标入口不可达或认证失败'}
+      - eval_time: 1m
+        alertname: KokoAlertmanagerUnavailable
+        exp_alerts:
+          - exp_labels: {job: alertmanager, instance: 'alertmanager:9093', severity: critical}
+            exp_annotations: {summary: 'Alertmanager 不可用，邮件通知可能中断'}
+      - eval_time: 3m
+        alertname: KokoScrapeUnavailable
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: KokoAlertmanagerUnavailable
+        exp_alerts: []
+  - interval: 15s
+    input_series:
+      - series: 'alertmanager_notifications_failed_total{integration="email",instance="alertmanager:9093"}'
+        values: '0 0 1x30'
+    alert_rule_test:
+      - eval_time: 1m30s
+        alertname: KokoEmailDeliveryFailed
+        exp_alerts:
+          - exp_labels: {integration: email, instance: 'alertmanager:9093', severity: critical}
+            exp_annotations: {summary: '邮件投递失败，请检查 SMTP 配置与 Alertmanager 日志'}
+      - eval_time: 7m
+        alertname: KokoEmailDeliveryFailed
+        exp_alerts: []

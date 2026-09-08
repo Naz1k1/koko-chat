@@ -80,6 +80,6 @@ TURN 控制端口 3478 UDP/TCP、中继端口 49160–49179 UDP 均只映射回�
 
 ## 运维监控与失败消息
 
-设置独立 KOKO_OPS_TOKEN 后启用运维 API 和后台采集/归档任务；留空关闭。KOKO_OPS_ACTOR 标记此凭据的操作身份，正文与 token 不写日志。生产入口应限制为运维网络，远程使用 HTTPS。运维命令为 `python3 scripts/ops.py`，Prometheus 配置与告警规则位于 monitoring/；本轮没有启动常驻 Prometheus 或向外发送告警。
+设置独立 KOKO_OPS_TOKEN 后启用运维 API 和后台采集/归档任务；留空关闭。KOKO_OPS_ACTOR 标记此凭据的操作身份，正文与 token 不写日志。生产入口应限制为运维网络，远程使用 HTTPS。运维命令为 `python3 scripts/ops.py`，Prometheus / Alertmanager 独立常驻部署位于 monitoring/，支持邮件故障与恢复通知，启动方式见 [监控手册](../docs/monitoring.md)。邮箱参数缺失时不会启用邮件。
 
 详细步骤见 [运维手册](../docs/operations.md)，两进程临时库故障测试见 `scripts/verify-multi-node.sh`。本次新增 V7、共 15 张业务及运维表；运维归档和审计暂无自动删除，需后续制定保留策略。
