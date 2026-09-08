@@ -12,6 +12,7 @@
 | CALL / CALL_ACK / CALL_CHANGED、GET /api/calls/config | 一对一语音、可补拉信令与限时 TURN 凭证；见 [语音契约](voice-calls.md) |
 | /api/groups/* | 建群、邀请、移除、退出与解散；见 [群聊契约](groups.md) |
 | /api/friend-requests/*、GET /api/friends | 好友申请、接受/拒绝与联系人；见 [联系人契约](contacts.md) |
+| /internal/ops/* | 独立运维凭据：监控、指标、死信查询、重放和审计；见 [运维契约](operations.md) |
 | /api/auth/*、POST /api/im/tickets | 注册、登录、刷新、注销和一次性票据；见 [认证契约](auth.md) |
 
 应用级心跳样例：

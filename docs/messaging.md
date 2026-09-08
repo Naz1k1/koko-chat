@@ -226,3 +226,9 @@ RustFS 保存图片与文件字节，RabbitMQ 仍只收到引用 messageId 的 m
 CALL_CHANGED 复用 Redis 路由和 RabbitMQ 网关交换机，携带目标设备，不携带媒体或 SDP。通话事务提交后发布，网关检查认证 session 再推送空提示；客户端以 SYNC 读取 MySQL 权威状态。提示允许丢失，由 2 秒轮询补齐，不套用持久消息 Outbox 的送达语义，避免离线用户重新上线后收到过期来电。
 
 OFFER / ANSWER / ICE 通过认证 Netty CALL 写入 call_signal，按游标补拉，结束时清理；音频不走 MQ。见 [语音协议](../contracts/voice-calls.md)。
+
+## 死信归档与人工重放（已实现）
+
+启用独立运维凭据后，ops 从本命名空间 DLQ 分批读取，MySQL 归档成功后才 ACK；失败保留原件。运维只能查询摘要与有效事件编号，不能通过接口改写正文。重放先创建幂等审计操作，再由带租约的发布任务转入正常 message.x，重新走现有成员和路由校验。PUBLISHED 仅表示 broker 确认可路由发布，客户端继续按消息 ID 去重。
+
+本轮已验证两个独立 JVM 的跨节点投递、网关强制退出后补拉，以及发布确认未写回情况下的租约恢复。broker 集群切主、AMQP 网络分区和性能仍待验证。详见 [运维契约](../contracts/operations.md)。

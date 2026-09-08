@@ -2,7 +2,7 @@
 
 桌面即时通信项目。客户端采用 **Kotlin + Compose Desktop**；服务端采用 **Java 21 + Spring Boot 3.5.x + Netty + RabbitMQ + MySQL + Redis + RustFS**，按 Controller / Handler → Service → Mapper 常规分层组织。
 
-当前已完成账号认证、好友与文本单聊/群聊闭环：注册登录、令牌刷新、Netty 认证与心跳、好友申请与接受/拒绝、联系人列表、按准确账号建立单聊、建群与邀请/移除/退出/解散、消息与 Outbox 同事务保存、RabbitMQ 分发、设备接收回执、离线补拉，以及中文桌面聊天界面与账号独立的 SQLite 消息缓存。现已支持用户已读回执、会话未读计数、跨设备读进度同步、断线补报，以及历史消息向前分页和阅读位置保持；现已接入 RustFS 私有存储，支持图片/文件上传、消息引用、权限下载、桌面图片预览与断线重试。现已补齐私有缩略图、未发送附件过期回收及一对一语音通话（原生 WebRTC + 可选 coturn）。桌面端采用 MVVM + StateFlow、Ktor HTTPS/WSS、SQLDelight + SQLite，两端统一使用 JDK 21。
+当前已完成账号认证、好友与文本单聊/群聊闭环：注册登录、令牌刷新、Netty 认证与心跳、好友申请与接受/拒绝、联系人列表、按准确账号建立单聊、建群与邀请/移除/退出/解散、消息与 Outbox 同事务保存、RabbitMQ 分发、设备接收回执、离线补拉，以及中文桌面聊天界面与账号独立的 SQLite 消息缓存。现已支持用户已读回执、会话未读计数、跨设备读进度同步、断线补报，以及历史消息向前分页和阅读位置保持；现已接入 RustFS 私有存储，支持图片/文件上传、消息引用、权限下载、桌面图片预览与断线重试。现已补齐私有缩略图、未发送附件过期回收及一对一语音通话（原生 WebRTC + 可选 coturn）。后端已增加受保护的监控指标、死信归档与审计重放，并验证双进程节点退出后的恢复。桌面端采用 MVVM + StateFlow、Ktor HTTPS/WSS、SQLDelight + SQLite，两端统一使用 JDK 21。
 
 ## 后端启动
 
@@ -63,6 +63,9 @@ cd apps/desktop
 - [附件阶段验收与界面](docs/attachment-verification.md)
 - [语音通话协议](contracts/voice-calls.md)
 - [语音、缩略图及过期清理验收](docs/voice-verification.md)
+- [后台运维手册](docs/operations.md)
+- [运维接口契约](contracts/operations.md)
+- [监控、死信及多节点验收](docs/operations-verification.md)
 - [数据库建表文件、字段与迁移方法](docs/database.md)
 - [架构设计、技术选型与实施顺序](docs/architecture.md)
 - [Kotlin 桌面端：模块、状态、同步与打包](docs/desktop.md)

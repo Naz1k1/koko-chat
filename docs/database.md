@@ -1,6 +1,6 @@
 # 数据库文件与迁移说明
 
-数据库采用 MySQL 8.4、InnoDB、utf8mb4，首个 Flyway 版本建立 9 张业务表。SQL 包含中文说明、索引及约束，旧迁移保持不变。V2 增加认证字段，V3 新增 group_command，V4 新增 attachment，V5 增加附件过期清理字段，V6 新增 call_session / call_signal，当前共 13 张业务表。
+数据库采用 MySQL 8.4、InnoDB、utf8mb4，首个 Flyway 版本建立 9 张业务表。SQL 包含中文说明、索引及约束，旧迁移保持不变。V2 增加认证字段，V3 新增 group_command，V4 新增 attachment，V5 增加附件过期清理字段，V6 新增 call_session / call_signal，V7 新增 ops_dead_letter / ops_action，当前共 15 张业务及运维表。
 
 当前新增迁移：[V5 附件回收](../server/src/main/resources/db/migration/V5__expire_unsent_attachments.sql)、[V6 语音通话](../server/src/main/resources/db/migration/V6__create_voice_calls.sql)。
 
@@ -124,3 +124,11 @@ V5 为 PENDING/READY 附件设置 expires_at，以 cleanup_at 标记对象回收
 V6 新增 call_session 和 call_signal。CREATE 按双方用户 ID 排序加锁，串行判断占线；ACCEPT 锁定通话行，保证多设备只有一个接听赢家。结束状态与信令删除同事务，MQ 在提交后发状态提示，不存音频。通话元数据暂保留，没有历史查询页面。
 
 2026-09-08 已在独立 MySQL 8.4 临时库执行 V1–V6 与重复迁移验证，13 张业务表；local 库同样已到 V6。SQLite 仍为消息库 v3，缩略图只驻留内存，通话不进入持久化消息队列。结果见 [本轮验收](voice-verification.md)。
+
+## V7：运维归档和审计重放
+
+[迁移文件](../server/src/main/resources/db/migration/V7__create_operations_audit.sql) 增加 ops_dead_letter（按 MQ 命名空间与原始正文摘要归档）及 ops_action（人工确认/重放审计、发布租约）。active_dead_id 生成列的唯一约束保证同一归档最多一条未完成重放。正文只供内部校验，不通过查询接口返回。
+
+归档提交后才 ACK MQ；重放操作先提交再发布，确认写回匹配租约。重放保持原 messageId / eventId，不插入 message 或更新会话序号。原归档和审计均保留，不与业务用户建立删除级联。
+
+2026-09-08 在独立 MySQL 8.4 临时库完成 V1–V7 首次及重复迁移验证，共 15 张表；开发库也已到 V7。两个测试 JVM 另外使用独立随机测试库，结束时删除该库。详见 [运维验收](operations-verification.md)。
